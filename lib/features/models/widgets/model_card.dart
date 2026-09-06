@@ -107,6 +107,31 @@ class ModelCard extends ConsumerWidget {
               context,
             ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
+          if (model.compatibilityWarning != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 16, color: colorScheme.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      model.compatibilityWarning!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           if (entry.status == ModelStatus.notInstalled ||
               entry.status == ModelStatus.paused)
@@ -115,12 +140,9 @@ class ModelCard extends ConsumerWidget {
               entry.status == ModelStatus.paused)
             DownloadProgressView(progress: entry.progress),
           if (entry.status == ModelStatus.error && entry.errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                entry.errorMessage!,
-                style: TextStyle(color: colorScheme.error, fontSize: 13),
-              ),
+            _ErrorMessage(
+              message: entry.errorMessage!,
+              technicalDetails: entry.technicalDetails,
             ),
           if (entry.status == ModelStatus.loading ||
               entry.status == ModelStatus.verifying)
@@ -146,6 +168,81 @@ class ModelCard extends ConsumerWidget {
                 ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A friendly error line with the raw underlying error tucked behind an
+/// explicit "جزئیات فنی" toggle — never shown by default, per the brief's
+/// "never expose raw exceptions to users" rule.
+class _ErrorMessage extends StatefulWidget {
+  const _ErrorMessage({required this.message, this.technicalDetails});
+
+  final String message;
+  final String? technicalDetails;
+
+  @override
+  State<_ErrorMessage> createState() => _ErrorMessageState();
+}
+
+class _ErrorMessageState extends State<_ErrorMessage> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.message,
+            style: TextStyle(color: colorScheme.error, fontSize: 13),
+          ),
+          if (widget.technicalDetails != null) ...[
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      Strings.technicalDetails,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_expanded)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(
+                  widget.technicalDetails!,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  textDirection: TextDirection.ltr,
+                ),
+              ),
+          ],
         ],
       ),
     );

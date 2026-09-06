@@ -104,6 +104,9 @@ abstract final class Strings {
       'فایل مدل آسیب دیده است. لطفاً دوباره دانلود کنید.';
   static const errorInsufficientStorage = 'فضای ذخیره‌سازی کافی نیست.';
   static const errorLoadFailed = 'بارگذاری جما روی این دستگاه ممکن نشد.';
+  static const errorOutOfMemory =
+      'حافظه دستگاه برای بارگذاری این مدل کافی نبود. بستن سایر برنامه‌ها یا استفاده از مدل کوچک‌تر ممکن است کمک کند.';
+  static const technicalDetails = 'جزئیات فنی';
   static const errorGenerationFailed = 'تولید پاسخ با خطا مواجه شد.';
   static const errorUnsupportedPlatform =
       'اجرای محلی هوش مصنوعی هنوز روی این پلتفرم پشتیبانی نمی‌شود.';

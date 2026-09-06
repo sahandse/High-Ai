@@ -369,3 +369,41 @@ Also added in this pass, per direct product feedback:
   rejected as unreliable on Android's app sandboxing). Insufficient storage disables the download
   button outright (it would fail anyway); low RAM only warns, since the threshold is a heuristic,
   not a number LiteRT-LM publishes.
+
+## Addendum 2: confirmed on a real device — per-SoC files need real detection
+
+A real device download of Gemma 4 E2B (the `qualcomm_sm8750` variant — `defaultVariant`, i.e.
+`variants.first`, since no per-device selection exists) completed successfully (confirming the
+416 fix above) but then failed to *load*, with LiteRT-LM's own engine raising:
+
+```
+Failed to create engine: NOT_FOUND: ERROR: [.../llm_litert_compiled_model_executor_factory.cc:121]
+Input tensor not found
+```
+
+This is exactly risk #2 from Phase 1 materializing: `gemma-4-E2B-it-litert-lm` is published only
+as three separate per-SoC ahead-of-time-compiled files (Qualcomm SM8750 / Google Tensor G5 /
+Intel PTL) with **no generic/CPU fallback file in that repo**, and this app has no real SoC
+detection — it always fetches `variants.first` regardless of the device's actual chip. A file
+compiled for one accelerator's tensor layout simply does not load on different hardware; that is
+what "Input tensor not found" means here, not a corrupt download.
+
+`gemma-4-E4B-it-litert-lm`, by contrast, does publish a generic `gemma-4-E4B-it.litertlm` meant
+for "Android, iOS, Desktop, IoT and Web" broadly — not tied to one accelerator. Fix applied:
+
+- `ModelCatalog.all` now lists **E4B first** and badges it "توصیه‌شده" (recommended/default) since
+  it is the only model here guaranteed to load on arbitrary hardware; E2B is re-badged "پردازنده
+  خاص" (specific processor) with a `ModelDefinition.compatibilityWarning` shown as a visible
+  warning box on its card, explaining plainly that it needs a matching chip and pointing at E4B
+  as the safe alternative.
+- Real per-device SoC detection (so E2B could pick the *right* variant instead of just warning
+  about the wrong one) is not implemented — Android's `Build.SOC_MODEL`/`Build.HARDWARE` values
+  don't reliably map to Qualcomm's marketing model numbers (e.g. "SM8750") across OEMs, so a
+  heuristic string-matcher would be guessing, not detecting. Flagged as follow-up work rather than
+  shipped as a false sense of reliability.
+- Separately, `ModelManager.loadModel`'s failure path was exposing the raw native error string
+  directly to the user (a real violation of the brief's "never expose raw exceptions" rule, caught
+  by this same test). It now maps known failure shapes (this tensor-mismatch case, out-of-memory)
+  to a plain-language Persian message via `_friendlyLoadError`, keeps the raw text in
+  `ModelEntryState.technicalDetails`, and the Models screen shows it only behind an explicit
+  "جزئیات فنی" (technical details) toggle.

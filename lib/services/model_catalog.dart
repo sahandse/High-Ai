@@ -24,6 +24,7 @@ class ModelDefinition {
     required this.badge,
     required this.contextLength,
     required this.variants,
+    this.compatibilityWarning,
   });
 
   /// Stable id, matching the Hugging Face repo under `litert-community/`.
@@ -46,6 +47,14 @@ class ModelDefinition {
   final int contextLength;
   final List<ModelVariant> variants;
 
+  /// Set only for models distributed as separate per-chipset compiled
+  /// files with no generic/CPU-only fallback (see docs/ARCHITECTURE.md §0)
+  /// — shown as an explicit warning in the picker, since without real
+  /// per-device SoC detection (not implemented — see the architecture doc)
+  /// the app always fetches [variants].first, and that file simply will
+  /// not load on hardware it wasn't compiled for.
+  final String? compatibilityWarning;
+
   ModelVariant get defaultVariant => variants.first;
 
   String fileNameFor(ModelVariant variant) => '${id}_${variant.id}.litertlm';
@@ -60,16 +69,19 @@ abstract final class ModelCatalog {
   static const gemma4E2b = ModelDefinition(
     id: 'gemma-4-e2b',
     displayName: 'Gemma 4 E2B',
-    description: 'نسخه سبک جما ۴؛ برای گفتگوی روزمره سریع و بهینه شده است.',
-    idealFor: 'بهترین گزینه برای بیشتر گوشی‌ها و استفاده روزمره',
+    description: 'نسخه سبک جما ۴، ویژه پردازنده‌های خاص؛ در صورت سازگاری بسیار سریع است.',
+    idealFor: 'فقط برای گوشی‌های دارای پردازنده Snapdragon 8 Elite‏، Google Tensor G5 یا Intel PTL',
     advantages: [
-      'نصب و بارگذاری سریع‌تر؛ حجم دانلود کمتر',
-      'مصرف حافظه و باتری پایین‌تر روی گوشی‌های معمولی',
-      'سرعت پاسخ‌دهی بالاتر، مناسب گفتگوی روان و بی‌وقفه',
-      'روی طیف گسترده‌تری از پردازنده‌های موبایل اجرا می‌شود',
+      'در صورت سازگاری: نصب و بارگذاری سریع‌تر؛ حجم دانلود کمتر',
+      'مصرف حافظه و باتری پایین‌تر نسبت به نسخه بزرگ‌تر',
+      'سرعت پاسخ‌دهی بسیار بالا روی پردازنده‌های سازگار',
     ],
-    badge: 'توصیه‌شده',
+    badge: 'پردازنده خاص',
     contextLength: 8192,
+    compatibilityWarning:
+        'این نسخه برای چند پردازنده خاص کامپایل شده و روی بیشتر گوشی‌ها اجرا نمی‌شود. '
+        'در حال حاضر برنامه نمی‌تواند پردازنده دستگاه شما را به‌طور خودکار تشخیص دهد؛ '
+        'اگر مطمئن نیستید، Gemma 4 E4B که روی همه دستگاه‌ها کار می‌کند را انتخاب کنید.',
     variants: [
       ModelVariant(
         id: 'qualcomm_sm8750',
@@ -92,15 +104,15 @@ abstract final class ModelCatalog {
   static const gemma4E4b = ModelDefinition(
     id: 'gemma-4-e4b',
     displayName: 'Gemma 4 E4B',
-    description: 'نسخه بزرگ‌تر جما ۴؛ برای درک عمیق‌تر و پاسخ‌های دقیق‌تر.',
-    idealFor: 'بهترین گزینه برای گوشی‌های قدرتمند و سوال‌های پیچیده‌تر',
+    description: 'نسخه عمومی جما ۴؛ روی هر گوشی اجرا می‌شود، با درک و پاسخ‌دهی قوی‌تر.',
+    idealFor: 'بهترین گزینه پیش‌فرض برای همه دستگاه‌ها',
     advantages: [
+      'یک فایل عمومی؛ روی هر گوشی اندرویدی قابل اجراست (نیازی به پردازنده خاص نیست)',
       'درک بهتر متن‌های طولانی و پیچیده',
       'استدلال و پاسخ‌دهی دقیق‌تر در موضوعات فنی و تخصصی',
-      'کیفیت نگارش و انسجام پاسخ در گفتگوهای بلند بالاتر',
-      'همان حریم خصوصی کامل و اجرای آفلاین، با کیفیتی بالاتر',
+      'همان حریم خصوصی کامل و اجرای کاملاً آفلاین',
     ],
-    badge: 'کیفیت بالاتر',
+    badge: 'توصیه‌شده',
     contextLength: 8192,
     variants: [
       ModelVariant(
@@ -111,8 +123,11 @@ abstract final class ModelCatalog {
     ],
   );
 
-  static const all = [gemma4E2b, gemma4E4b];
+  /// [gemma4E4b] listed first — it is the only model here with a generic,
+  /// non-chipset-specific file, so it is the safe default; see
+  /// [ModelDefinition.compatibilityWarning] on [gemma4E2b].
+  static const all = [gemma4E4b, gemma4E2b];
 
   static ModelDefinition byId(String id) =>
-      all.firstWhere((m) => m.id == id, orElse: () => gemma4E2b);
+      all.firstWhere((m) => m.id == id, orElse: () => gemma4E4b);
 }

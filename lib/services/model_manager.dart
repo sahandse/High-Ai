@@ -5,6 +5,7 @@ import 'package:ai_engine/ai_engine.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../core/strings.dart';
 import 'ai_engine_provider.dart';
 import 'device_capability_checker.dart';
 import 'model_catalog.dart';
@@ -17,13 +18,24 @@ class ModelEntryState {
     this.status = ModelStatus.notInstalled,
     this.progress,
     this.errorMessage,
+    this.technicalDetails,
     this.info,
     this.capability,
   });
 
   final ModelStatus status;
   final DownloadProgress? progress;
+
+  /// Always a friendly, Persian, non-technical message — see
+  /// [ModelManager._friendlyLoadError]. Never the raw native/platform
+  /// exception text, per the brief's "never expose raw exceptions" rule.
   final String? errorMessage;
+
+  /// The raw underlying error (native stack trace, HTTP detail, ...),
+  /// shown only behind an explicit "جزئیات فنی" toggle for advanced users
+  /// or bug reports — never as the primary message.
+  final String? technicalDetails;
+
   final ModelInfo? info;
 
   /// Populated by [ModelManager.checkCapability] before a download starts,
@@ -35,6 +47,7 @@ class ModelEntryState {
     ModelStatus? status,
     DownloadProgress? progress,
     String? errorMessage,
+    String? technicalDetails,
     ModelInfo? info,
     DeviceCapabilityResult? capability,
   }) {
@@ -42,6 +55,7 @@ class ModelEntryState {
       status: status ?? this.status,
       progress: progress,
       errorMessage: errorMessage,
+      technicalDetails: technicalDetails,
       info: info ?? this.info,
       capability: capability ?? this.capability,
     );
@@ -234,9 +248,35 @@ class ModelManager extends Notifier<ModelManagerState> {
     } on AiEngineException catch (e) {
       _updateEntry(
         modelId,
-        (entry) => entry.copyWith(status: ModelStatus.error, errorMessage: e.message),
+        (entry) => entry.copyWith(
+          status: ModelStatus.error,
+          errorMessage: _friendlyLoadError(model, e.message),
+          technicalDetails: e.message,
+        ),
       );
     }
+  }
+
+  /// Native engine failures (LiteRT-LM C++ error strings, platform channel
+  /// messages) are never shown to the user directly — see the brief's
+  /// error-handling requirements. This maps the handful of failure shapes
+  /// we've actually observed to a plain-language explanation; anything
+  /// unrecognized still gets a generic friendly message, with the raw text
+  /// kept in [ModelEntryState.technicalDetails] behind a details toggle.
+  String _friendlyLoadError(ModelDefinition model, String raw) {
+    final lower = raw.toLowerCase();
+    if (lower.contains('input tensor not found') ||
+        lower.contains('not_found') && lower.contains('executor')) {
+      // Observed on a real device with a per-SoC-compiled variant: the
+      // model file was built for a specific NPU/accelerator that this
+      // device doesn't have, so the compiled graph doesn't match at all.
+      return 'این نسخه از ${model.displayName} با پردازنده گوشی شما سازگار نیست. '
+          'اگر مدل دیگری با سازگاری عمومی‌تر در دسترس است، آن را امتحان کنید.';
+    }
+    if (lower.contains('out of memory') || lower.contains('oom')) {
+      return Strings.errorOutOfMemory;
+    }
+    return Strings.errorLoadFailed;
   }
 
   Future<void> unloadModel() async {
