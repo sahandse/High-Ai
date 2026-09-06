@@ -10,9 +10,9 @@ import 'model_status_widgets.dart';
 /// One model's card in the picker — used by both the first-run onboarding
 /// gate and the Settings ▸ Models screen so the two never drift apart.
 ///
-/// Kept deliberately minimal (a title row, one line of description, a
-/// capability check, and the actions for whatever state the model is in)
-/// rather than a dense info-dump, per the "graphical but minimal" brief.
+/// A calm, minimal surface (no heavy chips or borders) that leads with the
+/// name and who the model suits, then a short, honest list of concrete
+/// advantages, then whatever action the model's current state calls for.
 class ModelCard extends ConsumerWidget {
   const ModelCard({super.key, required this.model, this.showDeleteAction = false});
 
@@ -35,60 +35,79 @@ class ModelCard extends ConsumerWidget {
         (model.defaultVariant.approximateSizeBytes / 1e9).toStringAsFixed(1);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: isActive ? Border.all(color: colorScheme.primary, width: 1.5) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  model.displayName,
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        model.displayName,
+                        style: Theme.of(context).textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      model.badge,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (isActive) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.check_circle_rounded, size: 16, color: colorScheme.primary),
+                    ],
+                  ],
                 ),
-              ),
-              if (isActive)
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 6),
-                  child: Icon(
-                    Icons.check_circle_rounded,
-                    size: 18,
-                    color: colorScheme.primary,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Chip(
-                label: Text(model.badge, style: const TextStyle(fontSize: 11)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                backgroundColor: colorScheme.secondaryContainer,
-                side: BorderSide.none,
               ),
               StatusChip(status: entry.status),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            model.idealFor,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 10),
           Text(model.description, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
+          ...model.advantages.map(
+            (advantage) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.check_rounded, size: 15, color: colorScheme.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(advantage, style: Theme.of(context).textTheme.bodySmall),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
           Text(
             '${Strings.modelSize}: تقریباً $sizeGb گیگابایت',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           if (entry.status == ModelStatus.notInstalled ||
               entry.status == ModelStatus.paused)
             CapabilitySummary(modelId: model.id),

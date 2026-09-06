@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/strings.dart';
 import '../../services/settings_service.dart';
+import 'widgets/theme_preset_picker.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -18,102 +19,113 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text(Strings.settings)),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
-          ListTile(
-            leading: const Icon(Icons.memory_rounded),
-            title: const Text(Strings.models),
-            trailing: const Icon(Icons.chevron_left_rounded),
-            onTap: () => context.push('/settings/models'),
-          ),
-          const Divider(height: 32),
-          Text(Strings.appearance, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          Text(
-            Strings.themePresetLabel,
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: 8),
-          _ThemePresetPicker(
-            selected: themePreset,
-            onChanged: (preset) =>
-                ref.read(themePresetProvider.notifier).setPreset(preset),
-          ),
-          if (themePreset == ThemePreset.classic) ...[
-            const SizedBox(height: 16),
-            Text(
-              Strings.themeBrightnessLabel,
-              style: Theme.of(context).textTheme.labelLarge,
+          _SectionCard(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.memory_rounded),
+              title: const Text(Strings.models),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: () => context.push('/settings/models'),
             ),
-            const SizedBox(height: 8),
-            SegmentedButton<ThemeMode>(
-              segments: const [
-                ButtonSegment(
-                  value: ThemeMode.system,
-                  label: Text(Strings.themeSystem),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(Strings.appearance, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 14),
+                ThemePresetPicker(
+                  selected: themePreset,
+                  onChanged: (preset) =>
+                      ref.read(themePresetProvider.notifier).setPreset(preset),
                 ),
-                ButtonSegment(value: ThemeMode.light, label: Text(Strings.themeLight)),
-                ButtonSegment(value: ThemeMode.dark, label: Text(Strings.themeDark)),
+                if (themePreset == ThemePreset.classic) ...[
+                  const SizedBox(height: 18),
+                  SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        label: Text(Strings.themeSystem),
+                      ),
+                      ButtonSegment(value: ThemeMode.light, label: Text(Strings.themeLight)),
+                      ButtonSegment(value: ThemeMode.dark, label: Text(Strings.themeDark)),
+                    ],
+                    selected: {themeMode},
+                    onSelectionChanged: (selection) => ref
+                        .read(themeModeProvider.notifier)
+                        .setThemeMode(selection.first),
+                  ),
+                ],
               ],
-              selected: {themeMode},
-              onSelectionChanged: (selection) => ref
-                  .read(themeModeProvider.notifier)
-                  .setThemeMode(selection.first),
             ),
-          ],
-          const Divider(height: 32),
-          Text(
-            Strings.generationSettings,
-            style: Theme.of(context).textTheme.titleMedium,
           ),
-          _SettingSlider(
-            label: Strings.temperature,
-            value: settings.temperature,
-            min: 0,
-            max: 2,
-            divisions: 40,
-            onChanged: (value) => ref
-                .read(generationSettingsProvider.notifier)
-                .update(settings.copyWith(temperature: value)),
-          ),
-          _SettingSlider(
-            label: Strings.topK,
-            value: settings.topK.toDouble(),
-            min: 1,
-            max: 256,
-            divisions: 255,
-            onChanged: (value) => ref
-                .read(generationSettingsProvider.notifier)
-                .update(settings.copyWith(topK: value.round())),
-          ),
-          _SettingSlider(
-            label: Strings.topP,
-            value: settings.topP,
-            min: 0.05,
-            max: 1,
-            divisions: 19,
-            onChanged: (value) => ref
-                .read(generationSettingsProvider.notifier)
-                .update(settings.copyWith(topP: value)),
-          ),
-          _SettingSlider(
-            label: Strings.maxOutputTokens,
-            value: settings.maxOutputTokens.toDouble(),
-            min: 64,
-            max: 4096,
-            divisions: 63,
-            onChanged: (value) => ref
-                .read(generationSettingsProvider.notifier)
-                .update(settings.copyWith(maxOutputTokens: value.round())),
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              onPressed: () =>
-                  ref.read(generationSettingsProvider.notifier).resetToDefaults(),
-              icon: const Icon(Icons.restore_rounded),
-              label: const Text(Strings.resetDefaults),
+          const SizedBox(height: 16),
+          _SectionCard(
+            padding: EdgeInsets.zero,
+            child: Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                title: Text(
+                  Strings.generationSettings,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                children: [
+                  _SettingSlider(
+                    label: Strings.temperature,
+                    value: settings.temperature,
+                    min: 0,
+                    max: 2,
+                    divisions: 40,
+                    onChanged: (value) => ref
+                        .read(generationSettingsProvider.notifier)
+                        .update(settings.copyWith(temperature: value)),
+                  ),
+                  _SettingSlider(
+                    label: Strings.topK,
+                    value: settings.topK.toDouble(),
+                    min: 1,
+                    max: 256,
+                    divisions: 255,
+                    onChanged: (value) => ref
+                        .read(generationSettingsProvider.notifier)
+                        .update(settings.copyWith(topK: value.round())),
+                  ),
+                  _SettingSlider(
+                    label: Strings.topP,
+                    value: settings.topP,
+                    min: 0.05,
+                    max: 1,
+                    divisions: 19,
+                    onChanged: (value) => ref
+                        .read(generationSettingsProvider.notifier)
+                        .update(settings.copyWith(topP: value)),
+                  ),
+                  _SettingSlider(
+                    label: Strings.maxOutputTokens,
+                    value: settings.maxOutputTokens.toDouble(),
+                    min: 64,
+                    max: 4096,
+                    divisions: 63,
+                    onChanged: (value) => ref
+                        .read(generationSettingsProvider.notifier)
+                        .update(settings.copyWith(maxOutputTokens: value.round())),
+                  ),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          ref.read(generationSettingsProvider.notifier).resetToDefaults(),
+                      icon: const Icon(Icons.restore_rounded, size: 18),
+                      label: const Text(Strings.resetDefaults),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -122,80 +134,24 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-class _ThemePresetPicker extends StatelessWidget {
-  const _ThemePresetPicker({required this.selected, required this.onChanged});
+/// A quiet, borderless surface used to group related settings — keeps the
+/// screen feeling like a small number of calm sections instead of a long
+/// flat list of controls.
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.child, this.padding = const EdgeInsets.all(16)});
 
-  final ThemePreset selected;
-  final ValueChanged<ThemePreset> onChanged;
-
-  static const _options = [
-    (ThemePreset.classic, Strings.themePresetClassic, Color(0xFF2F6F5E), Color(0xFFF4F4F5)),
-    (
-      ThemePreset.chatgptLight,
-      Strings.themePresetChatgptLight,
-      Color(0xFF10A37F),
-      Color(0xFFFFFFFF),
-    ),
-    (
-      ThemePreset.claudeDark,
-      Strings.themePresetClaudeDark,
-      Color(0xFFCC785C),
-      Color(0xFF1F1B18),
-    ),
-  ];
+  final Widget child;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _options.map((option) {
-        final (preset, label, accent, background) = option;
-        final isSelected = preset == selected;
-        return InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => onChanged(preset),
-          child: Container(
-            width: 108,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected
-                    ? accent
-                    : Theme.of(context).colorScheme.outlineVariant,
-                width: isSelected ? 2 : 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: background.computeLuminance() > 0.5
-                        ? Colors.black87
-                        : Colors.white70,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: child,
     );
   }
 }
@@ -220,15 +176,20 @@ class _SettingSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(label),
+              Text(label, style: Theme.of(context).textTheme.bodyMedium),
               const Spacer(),
-              Text(value.toStringAsFixed(value >= 10 ? 0 : 2)),
+              Text(
+                value.toStringAsFixed(value >= 10 ? 0 : 2),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
           ),
           Slider(

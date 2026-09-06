@@ -59,6 +59,7 @@ abstract final class Strings {
   static const invalidSettings = 'مقدار وارد شده نامعتبر است';
 
   // Models
+  static const pickThemeFirst = 'ظاهر برنامه را انتخاب کنید';
   static const chooseModel = 'یک مدل را برای دانلود انتخاب کنید';
   static const modelStatusNotInstalled = 'نصب نشده';
   static const modelStatusDownloading = 'در حال دانلود';

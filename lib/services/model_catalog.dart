@@ -19,6 +19,8 @@ class ModelDefinition {
     required this.id,
     required this.displayName,
     required this.description,
+    required this.idealFor,
+    required this.advantages,
     required this.badge,
     required this.contextLength,
     required this.variants,
@@ -29,8 +31,14 @@ class ModelDefinition {
 
   final String displayName;
 
-  /// Short Persian description shown in the model picker.
+  /// One-line Persian summary shown right under the model name.
   final String description;
+
+  /// A short "بهترین گزینه برای..." line — who this model suits.
+  final String idealFor;
+
+  /// Concrete, honest advantages shown as a bullet list in the picker.
+  final List<String> advantages;
 
   /// Short Persian label, e.g. "توصیه‌شده" or "حرفه‌ای".
   final String badge;
@@ -52,8 +60,14 @@ abstract final class ModelCatalog {
   static const gemma4E2b = ModelDefinition(
     id: 'gemma-4-e2b',
     displayName: 'Gemma 4 E2B',
-    description:
-        'مدل کوچک و سریع. برای اکثر گوشی‌ها مناسب است و حافظه کمتری مصرف می‌کند.',
+    description: 'نسخه سبک جما ۴؛ برای گفتگوی روزمره سریع و بهینه شده است.',
+    idealFor: 'بهترین گزینه برای بیشتر گوشی‌ها و استفاده روزمره',
+    advantages: [
+      'نصب و بارگذاری سریع‌تر؛ حجم دانلود کمتر',
+      'مصرف حافظه و باتری پایین‌تر روی گوشی‌های معمولی',
+      'سرعت پاسخ‌دهی بالاتر، مناسب گفتگوی روان و بی‌وقفه',
+      'روی طیف گسترده‌تری از پردازنده‌های موبایل اجرا می‌شود',
+    ],
     badge: 'توصیه‌شده',
     contextLength: 8192,
     variants: [
@@ -78,8 +92,14 @@ abstract final class ModelCatalog {
   static const gemma4E4b = ModelDefinition(
     id: 'gemma-4-e4b',
     displayName: 'Gemma 4 E4B',
-    description:
-        'مدل بزرگ‌تر با کیفیت پاسخ بهتر. به حافظه و فضای بیشتری نیاز دارد و ممکن است کندتر باشد.',
+    description: 'نسخه بزرگ‌تر جما ۴؛ برای درک عمیق‌تر و پاسخ‌های دقیق‌تر.',
+    idealFor: 'بهترین گزینه برای گوشی‌های قدرتمند و سوال‌های پیچیده‌تر',
+    advantages: [
+      'درک بهتر متن‌های طولانی و پیچیده',
+      'استدلال و پاسخ‌دهی دقیق‌تر در موضوعات فنی و تخصصی',
+      'کیفیت نگارش و انسجام پاسخ در گفتگوهای بلند بالاتر',
+      'همان حریم خصوصی کامل و اجرای آفلاین، با کیفیتی بالاتر',
+    ],
     badge: 'کیفیت بالاتر',
     contextLength: 8192,
     variants: [

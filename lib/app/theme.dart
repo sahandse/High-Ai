@@ -77,18 +77,54 @@ ThemeData _claudeDarkTheme() {
 }
 
 ThemeData _themeFromScheme(ColorScheme colorScheme) {
+  // A single, moderate corner radius used everywhere instead of Material 3's
+  // default full-stadium buttons — reads calmer and more professional,
+  // closer to the reference apps named in the brief, without copying them.
+  const controlRadius = 12.0;
+  final buttonShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(controlRadius),
+  );
+
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
     scaffoldBackgroundColor: colorScheme.surface,
     visualDensity: VisualDensity.standard,
+    splashFactory: InkSparkle.splashFactory,
     appBarTheme: AppBarTheme(
       backgroundColor: colorScheme.surface,
       surfaceTintColor: colorScheme.surface,
       elevation: 0,
       centerTitle: false,
+      titleTextStyle: TextStyle(
+        color: colorScheme.onSurface,
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+      ),
     ),
     cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
+    dividerTheme: DividerThemeData(color: colorScheme.outlineVariant, space: 1),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        shape: buttonShape,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: buttonShape,
+        side: BorderSide(color: colorScheme.outlineVariant),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(shape: buttonShape),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: SegmentedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
@@ -97,7 +133,7 @@ ThemeData _themeFromScheme(ColorScheme colorScheme) {
         vertical: 12,
       ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(controlRadius + 4),
         borderSide: BorderSide.none,
       ),
     ),
