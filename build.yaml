@@ -1,0 +1,9 @@
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          # Store DateTime columns as ISO-8601 text instead of unix-epoch
+          # seconds, so messages created within the same second (common
+          # during streaming) still compare and order correctly.
+          store_date_time_values_as_text: true
