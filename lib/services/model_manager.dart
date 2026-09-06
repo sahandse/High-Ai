@@ -70,6 +70,9 @@ class ModelManager extends Notifier<ModelState> {
     final path = await _resolveModelPath();
     if (await _downloader.isInstalled(path)) {
       state = state.copyWith(status: ModelStatus.ready);
+      // Already downloaded from a previous run — load it automatically so
+      // the user can start chatting right away, without an extra tap.
+      await loadModel();
     } else if (await _downloader.hasResumableDownload(path)) {
       // Leave as notInstalled but the Models screen offers "resume" once
       // the user asks to download again — see resumeOrStartDownload().
@@ -95,6 +98,10 @@ class ModelManager extends Notifier<ModelState> {
       state = state.copyWith(status: ModelStatus.verifying);
       if (await _downloader.isInstalled(path)) {
         state = state.copyWith(status: ModelStatus.ready);
+        // Load immediately, like Google AI Edge Gallery does — the user
+        // shouldn't have to tap a second button after a multi-GB download
+        // just to start chatting.
+        await loadModel();
       } else {
         state = state.copyWith(
           status: ModelStatus.error,
