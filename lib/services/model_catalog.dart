@@ -1,7 +1,15 @@
-/// Static metadata for the models this app can download — see
-/// docs/ARCHITECTURE.md §0/§7: Hugging Face hosts several per-SoC
-/// `.litertlm` files for some models rather than one universal artifact,
-/// so each [ModelDefinition] lists its own [variants].
+/// Static metadata for the models this app can download.
+///
+/// Sizes, minimum RAM, and filenames below are taken from Google's own
+/// `google-ai-edge/gallery` reference app's official model allowlist
+/// (`model_allowlists/1_0_12.json`, commit hashes recorded per model) —
+/// not guessed. Earlier revisions of this catalog pointed at per-SoC
+/// ahead-of-time-compiled `.litertlm` files (e.g. `..._qualcomm_sm8750`)
+/// that only load on the exact chip they were compiled for; those turned
+/// out to be a mistake confirmed on a real device (see
+/// docs/ARCHITECTURE.md "Addendum 3") — Gallery itself ships the plain,
+/// generic file per model, which runs broadly via LiteRT-LM's GPU/CPU
+/// delegates instead of one accelerator's AOT-compiled graph.
 class ModelVariant {
   const ModelVariant({
     required this.id,
@@ -23,6 +31,7 @@ class ModelDefinition {
     required this.advantages,
     required this.badge,
     required this.contextLength,
+    required this.minRamGb,
     required this.variants,
     this.compatibilityWarning,
   });
@@ -45,14 +54,16 @@ class ModelDefinition {
   final String badge;
 
   final int contextLength;
+
+  /// Minimum device RAM Google's own Gallery app requires for this model —
+  /// not a heuristic. Used directly by [DeviceCapabilityChecker].
+  final int minRamGb;
+
   final List<ModelVariant> variants;
 
-  /// Set only for models distributed as separate per-chipset compiled
-  /// files with no generic/CPU-only fallback (see docs/ARCHITECTURE.md §0)
-  /// — shown as an explicit warning in the picker, since without real
-  /// per-device SoC detection (not implemented — see the architecture doc)
-  /// the app always fetches [variants].first, and that file simply will
-  /// not load on hardware it wasn't compiled for.
+  /// Set for a model whose only available file needs specific hardware
+  /// this app cannot verify ahead of time — shown as an explicit warning
+  /// in the picker rather than silently letting the load fail later.
   final String? compatibilityWarning;
 
   ModelVariant get defaultVariant => variants.first;
@@ -69,34 +80,22 @@ abstract final class ModelCatalog {
   static const gemma4E2b = ModelDefinition(
     id: 'gemma-4-e2b',
     displayName: 'Gemma 4 E2B',
-    description: 'نسخه سبک جما ۴، ویژه پردازنده‌های خاص؛ در صورت سازگاری بسیار سریع است.',
-    idealFor: 'فقط برای گوشی‌های دارای پردازنده Snapdragon 8 Elite‏، Google Tensor G5 یا Intel PTL',
+    description: 'نسخه سبک و عمومی جما ۴؛ برای گفتگوی روزمره روی اکثر گوشی‌ها.',
+    idealFor: 'بهترین گزینه پیش‌فرض؛ گوشی‌های با ۸ گیگابایت رم یا بیشتر',
     advantages: [
-      'در صورت سازگاری: نصب و بارگذاری سریع‌تر؛ حجم دانلود کمتر',
+      'یک فایل عمومی؛ نیازی به پردازنده خاص ندارد و روی اکثر گوشی‌ها اجرا می‌شود',
+      'حجم دانلود کمتر (حدود ۲.۴ گیگابایت)',
       'مصرف حافظه و باتری پایین‌تر نسبت به نسخه بزرگ‌تر',
-      'سرعت پاسخ‌دهی بسیار بالا روی پردازنده‌های سازگار',
+      'سرعت پاسخ‌دهی مناسب برای گفتگوی روان و بی‌وقفه',
     ],
-    badge: 'پردازنده خاص',
-    contextLength: 8192,
-    compatibilityWarning:
-        'این نسخه برای چند پردازنده خاص کامپایل شده و روی بیشتر گوشی‌ها اجرا نمی‌شود. '
-        'در حال حاضر برنامه نمی‌تواند پردازنده دستگاه شما را به‌طور خودکار تشخیص دهد؛ '
-        'اگر مطمئن نیستید، Gemma 4 E4B که روی همه دستگاه‌ها کار می‌کند را انتخاب کنید.',
+    badge: 'توصیه‌شده',
+    contextLength: 32000,
+    minRamGb: 8,
     variants: [
       ModelVariant(
-        id: 'qualcomm_sm8750',
-        downloadUrl: '$_gemma4E2bBase/gemma-4-E2B-it_qualcomm_sm8750.litertlm',
-        approximateSizeBytes: 3243000000,
-      ),
-      ModelVariant(
-        id: 'google_tensor_g5',
-        downloadUrl: '$_gemma4E2bBase/gemma-4-E2B-it_Google_Tensor_G5.litertlm',
-        approximateSizeBytes: 3340000000,
-      ),
-      ModelVariant(
-        id: 'intel_ptl',
-        downloadUrl: '$_gemma4E2bBase/gemma-4-E2B-it_intel_PTL.litertlm',
-        approximateSizeBytes: 3168000000,
+        id: 'generic',
+        downloadUrl: '$_gemma4E2bBase/gemma-4-E2B-it.litertlm',
+        approximateSizeBytes: 2583085056,
       ),
     ],
   );
@@ -104,30 +103,31 @@ abstract final class ModelCatalog {
   static const gemma4E4b = ModelDefinition(
     id: 'gemma-4-e4b',
     displayName: 'Gemma 4 E4B',
-    description: 'نسخه عمومی جما ۴؛ روی هر گوشی اجرا می‌شود، با درک و پاسخ‌دهی قوی‌تر.',
-    idealFor: 'بهترین گزینه پیش‌فرض برای همه دستگاه‌ها',
+    description: 'نسخه بزرگ‌تر جما ۴؛ درک و پاسخ‌دهی قوی‌تر، برای گوشی‌های پرقدرت.',
+    idealFor: 'فقط برای گوشی‌های با حداقل ۱۲ گیگابایت رم',
     advantages: [
-      'یک فایل عمومی؛ روی هر گوشی اندرویدی قابل اجراست (نیازی به پردازنده خاص نیست)',
       'درک بهتر متن‌های طولانی و پیچیده',
       'استدلال و پاسخ‌دهی دقیق‌تر در موضوعات فنی و تخصصی',
+      'کیفیت نگارش و انسجام پاسخ در گفتگوهای بلند بالاتر',
       'همان حریم خصوصی کامل و اجرای کاملاً آفلاین',
     ],
-    badge: 'توصیه‌شده',
-    contextLength: 8192,
+    badge: 'نیازمند رم بالا',
+    contextLength: 32000,
+    minRamGb: 12,
+    compatibilityWarning:
+        'این مدل به حداقل ۱۲ گیگابایت رم نیاز دارد. روی گوشی‌های با رم کمتر ممکن است '
+        'بارگذاری نشود یا بسیار کند اجرا شود.',
     variants: [
       ModelVariant(
         id: 'generic',
         downloadUrl: '$_gemma4E4bBase/gemma-4-E4B-it.litertlm',
-        approximateSizeBytes: 3660000000,
+        approximateSizeBytes: 3654467584,
       ),
     ],
   );
 
-  /// [gemma4E4b] listed first — it is the only model here with a generic,
-  /// non-chipset-specific file, so it is the safe default; see
-  /// [ModelDefinition.compatibilityWarning] on [gemma4E2b].
-  static const all = [gemma4E4b, gemma4E2b];
+  static const all = [gemma4E2b, gemma4E4b];
 
   static ModelDefinition byId(String id) =>
-      all.firstWhere((m) => m.id == id, orElse: () => gemma4E4b);
+      all.firstWhere((m) => m.id == id, orElse: () => gemma4E2b);
 }

@@ -189,13 +189,19 @@ List<Widget> modelActionsFor(
 ) {
   final manager = ref.read(modelManagerProvider.notifier);
   final capability = ref.watch(modelCapabilityProvider(model.id)).value;
-  final blockedByStorage = capability != null && !capability.isStorageSufficient;
+  // Both figures are real device facts once known (storage) or Google's own
+  // documented minimum (RAM, from the Gallery allowlist) — block rather
+  // than let the user spend bandwidth on a download that would just fail
+  // or run unusably slowly. Unknown (null) never blocks.
+  final blockedByCapability =
+      capability != null &&
+      (!capability.isStorageSufficient || !capability.isRamLikelySufficient);
 
   switch (entry.status) {
     case ModelStatus.notInstalled:
       return [
         FilledButton.icon(
-          onPressed: blockedByStorage ? null : () => manager.download(model.id),
+          onPressed: blockedByCapability ? null : () => manager.download(model.id),
           icon: const Icon(Icons.download_rounded),
           label: const Text(Strings.download),
         ),

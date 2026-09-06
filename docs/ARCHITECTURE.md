@@ -407,3 +407,43 @@ for "Android, iOS, Desktop, IoT and Web" broadly — not tied to one accelerator
   to a plain-language Persian message via `_friendlyLoadError`, keeps the raw text in
   `ModelEntryState.technicalDetails`, and the Models screen shows it only behind an explicit
   "جزئیات فنی" (technical details) toggle.
+
+## Addendum 3: the fix above was still wrong — Gallery ships a generic file per model
+
+The device that hit the E2B failure above was identified from its `Build.MODEL`
+(`M2012K11AG`) as a **Snapdragon 888 (SM8350)** phone — not a match for *any* of the three
+per-SoC E2B files (`qualcomm_sm8750`, `Google_Tensor_G5`, `intel_PTL`), confirming Addendum 2's
+diagnosis. But recommending E4B as "the safe default" in that same fix was itself wrong, for a
+reason only found by going to the actual source instead of re-guessing: Google's own
+`google-ai-edge/gallery` app ships a versioned **model allowlist**
+(`model_allowlists/1_0_12.json` on the gallery repo) that is the real, load-bearing config its
+production app uses. Fetched directly, it shows:
+
+| Model | file | exact size | min RAM |
+|---|---|---|---|
+| Gemma-4-E2B-it | `gemma-4-E2B-it.litertlm` | 2,583,085,056 bytes (~2.4 GB) | **8 GB** |
+| Gemma-4-E4B-it | `gemma-4-E4B-it.litertlm` | 3,654,467,584 bytes (~3.4 GB) | **12 GB** |
+
+Two corrections followed directly from this:
+
+1. **Both models have a plain, generic file** (`gemma-4-E2B-it.litertlm`,
+   `gemma-4-E4B-it.litertlm`) distinct from the per-SoC AOT-compiled ones — Gallery runs it via
+   LiteRT-LM's `"gpu,cpu"` delegate configuration, not one accelerator's compiled graph. This is
+   the file this app should have been downloading for E2B all along; the per-SoC filenames are a
+   separate, newer publishing path for devices whose exact chip is confirmed, which this app does
+   not attempt to detect (see Addendum 2). `ModelCatalog.gemma4E2b` now points at the generic file
+   with Gallery's exact byte count.
+2. **E4B needs 12 GB of RAM, not ~8 GB as this app's old heuristic guessed** (`size × 1.3`). A
+   device with 8 GB total RAM — like the one that surfaced this whole thread — meets E2B's
+   requirement exactly but sits well under E4B's. `ModelDefinition` now carries Google's real
+   `minRamGb` instead of a guessed multiplier, `DeviceCapabilityChecker` compares total RAM
+   against it directly (with 10% slack, since `ActivityManager.MemoryInfo.totalMem` typically
+   reports somewhat less than a device's marketed RAM figure), and — since this number is now an
+   authoritative fact rather than a heuristic — insufficient RAM disables the download button
+   outright, same as insufficient storage, rather than only warning.
+
+Net effect: E2B is recommended again (smaller, generic, matches this device's 8 GB exactly);
+E4B is labeled "نیازمند رم بالا" (needs high RAM) and its own card explains why. A model already
+downloaded under the old per-SoC filename scheme is simply orphaned on disk under its old
+filename (no code deletes it automatically) — acceptable for now, but worth a cleanup pass if
+model file naming changes again.

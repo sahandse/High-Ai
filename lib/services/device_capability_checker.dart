@@ -6,15 +6,7 @@ import 'package:flutter/services.dart';
 import 'model_catalog.dart';
 
 const _deviceInfoChannel = MethodChannel('high_ai/device_info');
-
-/// A minimum-RAM heuristic per model — not an exact figure from LiteRT-LM
-/// (no such published number was found — see docs/ARCHITECTURE.md), but a
-/// conservative estimate: a `.litertlm` file's on-disk size is a mix of
-/// 2/4/8-bit weights, so resident memory is well under the file size, but
-/// the OS, Flutter engine, and the rest of a real phone's workload need
-/// headroom too.
-int _minimumRamBytesFor(ModelDefinition model) =>
-    (model.defaultVariant.approximateSizeBytes * 1.3).round();
+const _bytesPerGib = 1024 * 1024 * 1024;
 
 /// Result of a pre-download device check, shown to the user before they
 /// commit to a multi-GB download — see the brief's requirements around
@@ -47,7 +39,11 @@ class DeviceCapabilityResult {
 
   bool get isRamLikelySufficient {
     if (totalRamBytes == null) return true;
-    return totalRamBytes! >= recommendedRamBytes;
+    // Android reports somewhat less than a device's marketed RAM (some is
+    // reserved for hardware), so a "true" 8GB device might report ~7.4GB
+    // via ActivityManager — allow 10% slack against the nominal spec
+    // rather than false-flagging exactly-at-spec devices.
+    return totalRamBytes! >= recommendedRamBytes * 0.9;
   }
 
   bool get canProceed => isStorageSufficient;
@@ -60,7 +56,7 @@ class DeviceCapabilityResult {
 class DeviceCapabilityChecker {
   Future<DeviceCapabilityResult> check(ModelDefinition model, String installDir) async {
     final requiredStorage = model.defaultVariant.approximateSizeBytes;
-    final recommendedRam = _minimumRamBytesFor(model);
+    final recommendedRam = model.minRamGb * _bytesPerGib;
 
     int? freeStorage;
     try {
