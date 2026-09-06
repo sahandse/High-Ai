@@ -447,3 +447,35 @@ E4B is labeled "نیازمند رم بالا" (needs high RAM) and its own card 
 downloaded under the old per-SoC filename scheme is simply orphaned on disk under its old
 filename (no code deletes it automatically) — acceptable for now, but worth a cleanup pass if
 model file naming changes again.
+
+## Addendum 4: the full model set, from Gallery's live app and current allowlist
+
+The user then sent a screenshot of the actual, installed Gallery app's "AI Chat" model list —
+five models, all smaller than Gemma 4, none of them matching what this catalog offered. Rather
+than guess again, the current allowlist (`model_allowlists/1_0_19.json`, the newest of 16 versioned
+files in that directory as of this pass) was fetched directly and cross-checked field-by-field
+against the screenshot. It lists 10 models total; 7 are general chat models (the other 3 —
+`TinyGarden-270M`, `MobileActions-270M`, and `Magic touch` — back a different on-device
+UI-automation feature and an image-segmentation tool, not chat, and are excluded here):
+
+| Model | `modelId` | `modelFile` | size | min RAM |
+|---|---|---|---|---|
+| Gemma-4-E2B-it | `litert-community/gemma-4-E2B-it-litert-lm` | `gemma-4-E2B-it.litertlm` | ~2.4 GB | 8 GB |
+| Gemma-4-E4B-it | `litert-community/gemma-4-E4B-it-litert-lm` | `gemma-4-E4B-it.litertlm` | ~3.4 GB | 12 GB |
+| Gemma-3n-E2B-it | `google/gemma-3n-E2B-it-litert-lm` | `gemma-3n-E2B-it-int4.litertlm` | ~3.7 GB | 8 GB |
+| Gemma-3n-E4B-it | `google/gemma-3n-E4B-it-litert-lm` | `gemma-3n-E4B-it-int4.litertlm` | ~4.9 GB | 12 GB |
+| Gemma3-1B-IT | `litert-community/Gemma3-1B-IT` | `gemma3-1b-it-int4.litertlm` | ~584 MB | 6 GB |
+| Qwen2.5-1.5B-Instruct | `litert-community/Qwen2.5-1.5B-Instruct` | `Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm` | ~1.6 GB | 6 GB |
+| DeepSeek-R1-Distill-Qwen-1.5B | `litert-community/DeepSeek-R1-Distill-Qwen-1.5B` | `DeepSeek-R1-Distill-Qwen-1.5B_multi-prefill-seq_q8_ekv4096.litertlm` | ~1.8 GB | 6 GB |
+
+All seven are now in `ModelCatalog.all`, each with its own Persian description/advantages, using
+the `_hfUrl(modelId, modelFile)` pattern (`https://huggingface.co/<modelId>/resolve/main/<modelFile>`)
+that Gallery's own allowlist schema implies. Gemma 4 E2B stays the "توصیه‌شده" default — it's
+Gallery's own apparent default balance of size/RAM/quality — while Gemma3-1B-IT is flagged
+"سبک‌ترین" (lightest, 6 GB RAM, smallest download) as the safe fallback for weaker or
+storage-constrained devices, and the two E4B variants keep their RAM warnings.
+
+Note: `ModelDefinition`/`ModelVariant` switched from `const` to plain `final` instances here,
+because building each `downloadUrl` via a small `_hfUrl()` helper (instead of retyping the full
+URL seven times) is a runtime string interpolation, not a compile-time constant — Dart's `const`
+context would have rejected the function call.
