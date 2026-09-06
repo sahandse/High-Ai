@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -54,7 +53,6 @@ class ModelDownloadManager {
   CancelToken? _cancelToken;
 
   String _partPath(String destinationPath) => '$destinationPath.part';
-  String _metaPath(String destinationPath) => '$destinationPath.part.meta.json';
 
   /// True if a previous download left a resumable partial file behind.
   Future<bool> hasResumableDownload(String destinationPath) {
@@ -69,12 +67,17 @@ class ModelDownloadManager {
 
   /// Downloads [url] to [destinationPath], resuming from any existing
   /// `.part` file via an HTTP Range request, then verifies the result
-  /// (against [expectedSha256] if provided, otherwise by size only when
-  /// [expectedSizeBytes] is given) before atomically installing it.
+  /// before atomically installing it.
   ///
-  /// Emits progress on [onProgress]. Call [cancel] to abort — the partial
-  /// file is left in place so the download can resume later, matching the
-  /// "never lose progress on close" requirement.
+  /// [expectedSizeBytes] is only a fallback estimate (the catalog's
+  /// best-effort figure) — the server's own `Content-Length`/`Content-Range`
+  /// for *this* response is always preferred for both progress reporting
+  /// and final size verification, since a hardcoded estimate can be off by
+  /// a few bytes from the real file and would otherwise fail a perfectly
+  /// good download.
+  ///
+  /// Call [cancel] to pause — the partial file is left in place so the
+  /// download can resume later from the same byte offset.
   Future<void> download({
     required String url,
     required String destinationPath,
@@ -85,55 +88,95 @@ class ModelDownloadManager {
     final partFile = File(_partPath(destinationPath));
     await partFile.parent.create(recursive: true);
 
-    await _checkStorage(destinationPath, expectedSizeBytes);
-
     final existingBytes = await partFile.exists() ? await partFile.length() : 0;
     _cancelToken = CancelToken();
-
-    final stopwatch = Stopwatch()..start();
-    var bytesAtLastTick = existingBytes;
-    var lastTickMs = 0;
 
     final sink = partFile.openWrite(
       mode: existingBytes > 0 ? FileMode.append : FileMode.write,
     );
+
+    int? serverTotalBytes;
     try {
-      final response = await _dio.get<ResponseBody>(
-        url,
-        cancelToken: _cancelToken,
-        options: Options(
-          headers: existingBytes > 0 ? {'Range': 'bytes=$existingBytes-'} : null,
-          responseType: ResponseType.stream,
-        ),
-      );
+      final Response<ResponseBody> response;
+      try {
+        response = await _dio.get<ResponseBody>(
+          url,
+          cancelToken: _cancelToken,
+          options: Options(
+            headers: existingBytes > 0 ? {'range': 'bytes=$existingBytes-'} : null,
+            responseType: ResponseType.stream,
+            // Handle 416 ourselves instead of letting Dio throw — it is a
+            // meaningful, recoverable signal here (our resume offset is at
+            // or past the server's actual file size), not a hard failure.
+            validateStatus: (status) =>
+                status != null && (status == 200 || status == 206 || status == 416),
+          ),
+        );
+      } on DioException catch (e) {
+        await sink.flush();
+        await sink.close();
+        if (CancelToken.isCancel(e)) return; // paused, not an error.
+        throw ModelDownloadException('اتصال به سرور دانلود برقرار نشد: ${e.message}');
+      }
+
+      if (response.statusCode == 416) {
+        await sink.flush();
+        await sink.close();
+        await _handleRangeNotSatisfiable(
+          response: response,
+          partFile: partFile,
+          destinationPath: destinationPath,
+          existingBytes: existingBytes,
+          expectedSizeBytes: expectedSizeBytes,
+          expectedSha256: expectedSha256,
+        );
+        return;
+      }
+
+      serverTotalBytes = _totalFromHeaders(response.headers, existingBytes) ??
+          expectedSizeBytes;
+
+      final stopwatch = Stopwatch()..start();
+      var bytesAtLastTick = existingBytes;
+      var lastTickMs = 0;
       var received = 0;
+      var isFirstTick = true;
+
       await for (final chunk in response.data!.stream) {
         sink.add(chunk);
         received += chunk.length;
         final downloaded = existingBytes + received;
         final elapsedMs = stopwatch.elapsedMilliseconds;
         final deltaMs = elapsedMs - lastTickMs;
-        if (deltaMs >= 200) {
-          final speed = (downloaded - bytesAtLastTick) / (deltaMs / 1000);
+        // Always report the very first chunk immediately (so the UI shows
+        // progress right away instead of waiting out the throttle window),
+        // then throttle further updates to roughly 5/second.
+        if (isFirstTick || deltaMs >= 200) {
+          final speed = deltaMs > 0 ? (downloaded - bytesAtLastTick) / (deltaMs / 1000) : 0.0;
           bytesAtLastTick = downloaded;
           lastTickMs = elapsedMs;
+          isFirstTick = false;
           onProgress?.call(
             DownloadProgress(
               downloadedBytes: downloaded,
-              totalBytes: expectedSizeBytes ?? downloaded,
+              totalBytes: serverTotalBytes ?? downloaded,
               bytesPerSecond: speed,
             ),
           );
         }
       }
+      // Final tick so the UI can reach exactly 100% before verification.
+      onProgress?.call(
+        DownloadProgress(
+          downloadedBytes: existingBytes + received,
+          totalBytes: serverTotalBytes ?? (existingBytes + received),
+          bytesPerSecond: 0,
+        ),
+      );
     } on DioException catch (e) {
-      if (CancelToken.isCancel(e)) {
-        await sink.flush();
-        await sink.close();
-        return; // Partial file intentionally preserved for resume.
-      }
       await sink.flush();
       await sink.close();
+      if (CancelToken.isCancel(e)) return; // paused, not an error.
       throw ModelDownloadException('دانلود با خطا مواجه شد: ${e.message}');
     }
     await sink.flush();
@@ -142,23 +185,58 @@ class ModelDownloadManager {
     await _verifyAndInstall(
       partFile: partFile,
       destinationPath: destinationPath,
-      expectedSizeBytes: expectedSizeBytes,
+      expectedSizeBytes: serverTotalBytes,
       expectedSha256: expectedSha256,
     );
   }
 
-  Future<void> _checkStorage(String destinationPath, int? expectedSizeBytes) async {
-    if (expectedSizeBytes == null) return;
-    try {
-      final dir = Directory(File(destinationPath).parent.path);
-      // Not all platforms expose free-space APIs through dart:io directly;
-      // a best-effort check is still better than none. Failures here are
-      // swallowed intentionally — the download itself will fail loudly if
-      // storage actually runs out.
-      await dir.create(recursive: true);
-    } catch (_) {
-      // Ignore — handled by the actual write failing if space is short.
+  /// A 416 means our on-disk `.part` file's length is already at or beyond
+  /// what the server thinks the file is. Reconcile using whatever total the
+  /// server reports (from the `Content-Range: bytes */total` the spec
+  /// requires on a 416): if our bytes already cover it, the download was
+  /// actually already complete — verify and install instead of failing.
+  /// If the sizes can't be reconciled, the partial file is stale/corrupt;
+  /// delete it so a subsequent retry starts clean instead of 416-looping.
+  Future<void> _handleRangeNotSatisfiable({
+    required Response<ResponseBody> response,
+    required File partFile,
+    required String destinationPath,
+    required int existingBytes,
+    required int? expectedSizeBytes,
+    required String? expectedSha256,
+  }) async {
+    final serverTotal = _totalFromHeaders(response.headers, existingBytes);
+    final candidateTotal = serverTotal ?? expectedSizeBytes;
+    if (candidateTotal != null && existingBytes >= candidateTotal) {
+      await _verifyAndInstall(
+        partFile: partFile,
+        destinationPath: destinationPath,
+        expectedSizeBytes: candidateTotal,
+        expectedSha256: expectedSha256,
+      );
+      return;
     }
+    await partFile.delete().catchError((_) => partFile);
+    throw ModelDownloadException(
+      'فایل ناتمام قبلی با فایل روی سرور هم‌خوانی نداشت و حذف شد. لطفاً دوباره تلاش کنید.',
+    );
+  }
+
+  /// Reads the authoritative total file size from `Content-Range` (present
+  /// on both 206 Partial Content and 416 responses per HTTP spec) or falls
+  /// back to `Content-Length` for a fresh, non-ranged 200 response.
+  int? _totalFromHeaders(Headers headers, int existingBytes) {
+    final contentRange = headers.value('content-range');
+    if (contentRange != null) {
+      final match = RegExp(r'/(\d+)$').firstMatch(contentRange);
+      if (match != null) return int.tryParse(match.group(1)!);
+    }
+    final contentLength = headers.value('content-length');
+    if (contentLength != null) {
+      final length = int.tryParse(contentLength);
+      if (length != null) return existingBytes + length;
+    }
+    return null;
   }
 
   Future<void> _verifyAndInstall({
@@ -184,9 +262,6 @@ class ModelDownloadManager {
     }
     // Atomic install: rename only after verification succeeds.
     await partFile.rename(destinationPath);
-    await File(_metaPath(destinationPath)).delete().catchError((_) {
-      return File(_metaPath(destinationPath));
-    });
   }
 
   Future<String> _sha256Of(File file) async {
@@ -194,8 +269,11 @@ class ModelDownloadManager {
     return digest.toString();
   }
 
+  /// Aborts the current network transfer but keeps the partial file, so a
+  /// later call to [download] with the same arguments resumes from here —
+  /// used for both an explicit "pause" and tearing down on app close.
   void cancel() {
-    _cancelToken?.cancel('user_cancelled');
+    _cancelToken?.cancel('user_paused');
   }
 
   Future<void> delete(String destinationPath) async {
@@ -203,38 +281,5 @@ class ModelDownloadManager {
     await File(_partPath(destinationPath))
         .delete()
         .catchError((_) => File(_partPath(destinationPath)));
-  }
-}
-
-/// Small persisted manifest recording what a `.part` file expects, so a
-/// relaunch can validate/resume it instead of guessing.
-class DownloadManifest {
-  const DownloadManifest({required this.url, required this.totalBytes});
-
-  final String url;
-  final int totalBytes;
-
-  Map<String, Object?> toJson() => {'url': url, 'totalBytes': totalBytes};
-
-  factory DownloadManifest.fromJson(Map<String, Object?> json) =>
-      DownloadManifest(
-        url: json['url'] as String,
-        totalBytes: (json['totalBytes'] as num).toInt(),
-      );
-
-  static Future<void> write(String metaPath, DownloadManifest manifest) {
-    return File(metaPath).writeAsString(jsonEncode(manifest.toJson()));
-  }
-
-  static Future<DownloadManifest?> read(String metaPath) async {
-    final file = File(metaPath);
-    if (!await file.exists()) return null;
-    try {
-      return DownloadManifest.fromJson(
-        jsonDecode(await file.readAsString()) as Map<String, Object?>,
-      );
-    } on FormatException {
-      return null;
-    }
   }
 }

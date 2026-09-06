@@ -1,13 +1,22 @@
 import 'package:ai_engine/ai_engine.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/strings.dart';
+import '../../../services/device_capability_checker.dart';
+import '../../../services/model_catalog.dart';
 import '../../../services/model_download_manager.dart';
 import '../../../services/model_manager.dart';
 
-/// Small colored label for a [ModelStatus] — shared by the Settings ›
-/// Models screen and the first-run download gate so both read the same
-/// status the same way.
+/// Runs [ModelManager.checkCapability] once per model id and caches the
+/// result — both the onboarding gate and the Models screen read this so the
+/// native/plugin check only runs once per model per app session.
+final modelCapabilityProvider =
+    FutureProvider.family<DeviceCapabilityResult, String>((ref, modelId) {
+      return ref.read(modelManagerProvider.notifier).checkCapability(modelId);
+    });
+
+/// Small colored label for a [ModelStatus].
 class StatusChip extends StatelessWidget {
   const StatusChip({super.key, required this.status});
 
@@ -18,6 +27,7 @@ class StatusChip extends StatelessWidget {
     final label = switch (status) {
       ModelStatus.notInstalled => Strings.modelStatusNotInstalled,
       ModelStatus.downloading => Strings.modelStatusDownloading,
+      ModelStatus.paused => Strings.modelStatusPaused,
       ModelStatus.verifying => Strings.modelStatusVerifying,
       ModelStatus.ready => Strings.modelStatusReady,
       ModelStatus.loading => Strings.modelStatusLoading,
@@ -31,10 +41,12 @@ class StatusChip extends StatelessWidget {
         ? scheme.primary
         : scheme.onSurfaceVariant;
     return Chip(
-      label: Text(label),
+      label: Text(label, style: const TextStyle(fontSize: 12)),
       labelStyle: TextStyle(color: color),
       side: BorderSide(color: color.withValues(alpha: 0.4)),
       backgroundColor: Colors.transparent,
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 }
@@ -74,24 +86,116 @@ class DownloadProgressView extends StatelessWidget {
               '$totalMb مگابایت',
               progress.percent,
             ),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          Text(Strings.downloadSpeed('$speedMb مگابایت')),
-          if (eta != null) Text(Strings.etaLabel('${eta.inMinutes} دقیقه')),
+          Text(
+            Strings.downloadSpeed('$speedMb مگابایت'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (eta != null)
+            Text(
+              Strings.etaLabel('${eta.inMinutes} دقیقه'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
         ],
       ),
     );
   }
 }
 
-/// The action buttons appropriate for the model's current [ModelStatus] —
-/// shared so the download gate and the Models screen never drift apart on
-/// what each state lets the user do.
-List<Widget> modelActionsFor(ModelManager manager, ModelStatus status) {
-  switch (status) {
+/// Compact "will this fit?" line shown before/while a model is not yet
+/// installed — free storage and total RAM vs. what the model needs.
+class CapabilitySummary extends ConsumerWidget {
+  const CapabilitySummary({super.key, required this.modelId});
+
+  final String modelId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(modelCapabilityProvider(modelId));
+    final scheme = Theme.of(context).colorScheme;
+    return async.when(
+      loading: () => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          'در حال بررسی فضای دستگاه...',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (result) {
+        final lines = <Widget>[];
+        if (result.freeStorageBytes != null) {
+          final freeGb = (result.freeStorageBytes! / 1e9).toStringAsFixed(1);
+          final ok = result.isStorageSufficient;
+          lines.add(
+            _CapabilityLine(
+              ok: ok,
+              text: '${Strings.freeStorage}: $freeGb گیگابایت',
+            ),
+          );
+        }
+        if (result.totalRamBytes != null) {
+          final ramGb = (result.totalRamBytes! / 1e9).toStringAsFixed(1);
+          final ok = result.isRamLikelySufficient;
+          lines.add(
+            _CapabilityLine(ok: ok, text: '${Strings.deviceRam}: $ramGb گیگابایت'),
+          );
+        }
+        if (lines.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: lines),
+        );
+      },
+    );
+  }
+}
+
+class _CapabilityLine extends StatelessWidget {
+  const _CapabilityLine({required this.ok, required this.text});
+
+  final bool ok;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = ok ? scheme.onSurfaceVariant : scheme.error;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          ok ? Icons.check_circle_outline_rounded : Icons.warning_amber_rounded,
+          size: 14,
+          color: color,
+        ),
+        const SizedBox(width: 6),
+        Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color)),
+      ],
+    );
+  }
+}
+
+/// The action buttons appropriate for a model's current status — shared by
+/// the onboarding gate and the Models screen so both stay in sync.
+List<Widget> modelActionsFor(
+  BuildContext context,
+  WidgetRef ref,
+  ModelDefinition model,
+  ModelEntryState entry,
+) {
+  final manager = ref.read(modelManagerProvider.notifier);
+  final capability = ref.watch(modelCapabilityProvider(model.id)).value;
+  final blockedByStorage = capability != null && !capability.isStorageSufficient;
+
+  switch (entry.status) {
     case ModelStatus.notInstalled:
       return [
         FilledButton.icon(
-          onPressed: manager.download,
+          onPressed: blockedByStorage ? null : () => manager.download(model.id),
           icon: const Icon(Icons.download_rounded),
           label: const Text(Strings.download),
         ),
@@ -99,7 +203,25 @@ List<Widget> modelActionsFor(ModelManager manager, ModelStatus status) {
     case ModelStatus.downloading:
       return [
         OutlinedButton.icon(
-          onPressed: manager.cancelDownload,
+          onPressed: () => manager.pauseDownload(model.id),
+          icon: const Icon(Icons.pause_rounded),
+          label: const Text(Strings.pause),
+        ),
+        TextButton.icon(
+          onPressed: () => manager.cancelAndDeleteDownload(model.id),
+          icon: const Icon(Icons.close_rounded),
+          label: const Text(Strings.cancelDownload),
+        ),
+      ];
+    case ModelStatus.paused:
+      return [
+        FilledButton.icon(
+          onPressed: () => manager.download(model.id),
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text(Strings.resumeDownload),
+        ),
+        TextButton.icon(
+          onPressed: () => manager.cancelAndDeleteDownload(model.id),
           icon: const Icon(Icons.close_rounded),
           label: const Text(Strings.cancelDownload),
         ),
@@ -110,7 +232,7 @@ List<Widget> modelActionsFor(ModelManager manager, ModelStatus status) {
     case ModelStatus.ready:
       return [
         FilledButton.icon(
-          onPressed: manager.loadModel,
+          onPressed: () => manager.loadModel(model.id),
           icon: const Icon(Icons.play_arrow_rounded),
           label: const Text(Strings.load),
         ),
@@ -126,12 +248,12 @@ List<Widget> modelActionsFor(ModelManager manager, ModelStatus status) {
     case ModelStatus.error:
       return [
         FilledButton.icon(
-          onPressed: manager.download,
+          onPressed: () => manager.download(model.id),
           icon: const Icon(Icons.refresh_rounded),
           label: const Text(Strings.retry),
         ),
         OutlinedButton.icon(
-          onPressed: () => manager.loadModel(backend: Backend.cpu),
+          onPressed: () => manager.loadModel(model.id, backend: Backend.cpu),
           icon: const Icon(Icons.developer_board_rounded),
           label: const Text(Strings.useCpu),
         ),

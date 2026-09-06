@@ -5,8 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app/theme.dart';
+
 const _themeModeKey = 'theme_mode';
+const _themePresetKey = 'theme_preset';
 const _generationSettingsKey = 'generation_settings';
+const _activeModelIdKey = 'active_model_id';
+const _modelSetupCompleteKey = 'model_setup_complete';
 
 /// Wraps [SharedPreferences] for the small amount of app-wide state that
 /// isn't chat data (theme choice, generation settings) and so doesn't
@@ -28,6 +33,18 @@ class SettingsService {
     return _prefs.setString(_themeModeKey, mode.name);
   }
 
+  ThemePreset loadThemePreset() {
+    final value = _prefs.getString(_themePresetKey);
+    return ThemePreset.values.firstWhere(
+      (p) => p.name == value,
+      orElse: () => ThemePreset.classic,
+    );
+  }
+
+  Future<void> saveThemePreset(ThemePreset preset) {
+    return _prefs.setString(_themePresetKey, preset.name);
+  }
+
   GenerationSettings loadGenerationSettings() {
     final raw = _prefs.getString(_generationSettingsKey);
     if (raw == null) return const GenerationSettings();
@@ -43,6 +60,24 @@ class SettingsService {
   Future<void> saveGenerationSettings(GenerationSettings settings) {
     return _prefs.setString(_generationSettingsKey, jsonEncode(settings.toJson()));
   }
+
+  /// The model id the user last had loaded, so the app can auto-load it
+  /// again on the next launch. Null means no model has been loaded yet, or
+  /// the user explicitly unloaded one.
+  String? loadActiveModelId() => _prefs.getString(_activeModelIdKey);
+
+  Future<void> saveActiveModelId(String? modelId) {
+    if (modelId == null) return _prefs.remove(_activeModelIdKey);
+    return _prefs.setString(_activeModelIdKey, modelId);
+  }
+
+  /// True once the user has successfully started loading some model for
+  /// the first time — the first-run download gate (see [ModelSetupScreen]
+  /// in the app) checks this and, once true, never reappears even if the
+  /// model is later unloaded manually from Settings ▸ Models.
+  bool get hasCompletedModelSetup => _prefs.getBool(_modelSetupCompleteKey) ?? false;
+
+  Future<void> setModelSetupComplete() => _prefs.setBool(_modelSetupCompleteKey, true);
 }
 
 /// Overridden in `main()` once `SharedPreferences.getInstance()` resolves;
@@ -64,6 +99,20 @@ class ThemeModeController extends Notifier<ThemeMode> {
 
 final themeModeProvider = NotifierProvider<ThemeModeController, ThemeMode>(
   ThemeModeController.new,
+);
+
+class ThemePresetController extends Notifier<ThemePreset> {
+  @override
+  ThemePreset build() => ref.read(settingsServiceProvider).loadThemePreset();
+
+  void setPreset(ThemePreset preset) {
+    state = preset;
+    ref.read(settingsServiceProvider).saveThemePreset(preset);
+  }
+}
+
+final themePresetProvider = NotifierProvider<ThemePresetController, ThemePreset>(
+  ThemePresetController.new,
 );
 
 class GenerationSettingsController extends Notifier<GenerationSettings> {
@@ -88,3 +137,20 @@ final generationSettingsProvider =
     NotifierProvider<GenerationSettingsController, GenerationSettings>(
       GenerationSettingsController.new,
     );
+
+/// Whether the first-run model download gate should be considered done —
+/// see [SettingsService.hasCompletedModelSetup].
+class OnboardingController extends Notifier<bool> {
+  @override
+  bool build() => ref.read(settingsServiceProvider).hasCompletedModelSetup;
+
+  void complete() {
+    if (state) return;
+    state = true;
+    ref.read(settingsServiceProvider).setModelSetupComplete();
+  }
+}
+
+final onboardingCompleteProvider = NotifierProvider<OnboardingController, bool>(
+  OnboardingController.new,
+);

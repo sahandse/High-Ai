@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required in every build variant (not just debug/profile) — the
+         model downloader needs real network access in release builds. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="های ای‌آی"
         android:name="${applicationName}"

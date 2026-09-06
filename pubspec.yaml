@@ -39,6 +39,7 @@ dependencies:
   intl: ^0.20.2
   shared_preferences: ^2.3.4
   flutter_markdown_plus: ^1.0.12
+  disk_space_plus: ^0.2.6
 dev_dependencies:
   flutter_test:
     sdk: flutter

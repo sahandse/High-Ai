@@ -6,151 +6,248 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'ai_engine_provider.dart';
+import 'device_capability_checker.dart';
 import 'model_catalog.dart';
 import 'model_download_manager.dart';
+import 'settings_service.dart' show settingsServiceProvider, onboardingCompleteProvider;
 
-/// UI-facing state for the Models screen — combines on-disk/download state
-/// with the native engine's load state into the single status enum defined
-/// by `package:ai_engine` (docs/ARCHITECTURE.md §9).
-class ModelState {
-  const ModelState({
-    required this.status,
+/// Per-model download/load status, as shown in the model picker.
+class ModelEntryState {
+  const ModelEntryState({
+    this.status = ModelStatus.notInstalled,
     this.progress,
     this.errorMessage,
     this.info,
+    this.capability,
   });
-
-  const ModelState.initial() : this(status: ModelStatus.notInstalled);
 
   final ModelStatus status;
   final DownloadProgress? progress;
   final String? errorMessage;
   final ModelInfo? info;
 
-  ModelState copyWith({
+  /// Populated by [ModelManager.checkCapability] before a download starts,
+  /// so the picker can show "این مدل روی دستگاه شما قابل نصب است" (or not)
+  /// ahead of a multi-GB commitment.
+  final DeviceCapabilityResult? capability;
+
+  ModelEntryState copyWith({
     ModelStatus? status,
     DownloadProgress? progress,
     String? errorMessage,
     ModelInfo? info,
+    DeviceCapabilityResult? capability,
   }) {
-    return ModelState(
+    return ModelEntryState(
       status: status ?? this.status,
       progress: progress,
       errorMessage: errorMessage,
       info: info ?? this.info,
+      capability: capability ?? this.capability,
     );
   }
 }
 
-class ModelManager extends Notifier<ModelState> {
-  late final ModelDownloadManager _downloader;
-  late final ModelVariant _variant;
-  String? _modelPath;
+/// All known models' states, keyed by [ModelDefinition.id]. Only one model
+/// can be loaded into the native engine at a time — see [activeModelId].
+class ModelManagerState {
+  const ModelManagerState({this.entries = const {}});
 
-  @override
-  ModelState build() {
-    _downloader = ModelDownloadManager();
-    _variant = ModelCatalog.defaultVariant;
-    unawaited(_reconcileOnStartup());
-    return const ModelState.initial();
+  final Map<String, ModelEntryState> entries;
+
+  ModelEntryState entryFor(String modelId) =>
+      entries[modelId] ?? const ModelEntryState();
+
+  /// The model currently loading/loaded in the native engine, if any.
+  String? get activeModelId {
+    for (final entry in entries.entries) {
+      if (entry.value.status == ModelStatus.loading ||
+          entry.value.status == ModelStatus.loaded) {
+        return entry.key;
+      }
+    }
+    return null;
   }
 
-  Future<String> _resolveModelPath() async {
-    if (_modelPath != null) return _modelPath!;
+  ModelManagerState _withEntry(String modelId, ModelEntryState entry) {
+    return ModelManagerState(entries: {...entries, modelId: entry});
+  }
+}
+
+class ModelManager extends Notifier<ModelManagerState> {
+  late final ModelDownloadManager _downloader;
+  late final DeviceCapabilityChecker _capabilityChecker;
+
+  @override
+  ModelManagerState build() {
+    _downloader = ModelDownloadManager();
+    _capabilityChecker = DeviceCapabilityChecker();
+    unawaited(_reconcileOnStartup());
+    return const ModelManagerState();
+  }
+
+  Future<Directory> _modelsDirectory() async {
     final dir = await getApplicationSupportDirectory();
     final modelsDir = Directory('${dir.path}/models');
     await modelsDir.create(recursive: true);
-    _modelPath = '${modelsDir.path}/${ModelCatalog.fileNameFor(_variant)}';
-    return _modelPath!;
+    return modelsDir;
   }
 
-  /// Reconciles on-disk state with [ModelStatus] at app launch, per
+  Future<String> _resolveModelPath(ModelDefinition model) async {
+    final modelsDir = await _modelsDirectory();
+    return '${modelsDir.path}/${model.fileNameFor(model.defaultVariant)}';
+  }
+
+  void _updateEntry(String modelId, ModelEntryState Function(ModelEntryState) update) {
+    final current = state.entryFor(modelId);
+    state = state._withEntry(modelId, update(current));
+  }
+
+  /// Reconciles on-disk state for every catalog model at app launch, then
+  /// auto-loads whichever model the user had active last time — see
   /// docs/ARCHITECTURE.md §7: a `.part` file alone is never "ready".
   Future<void> _reconcileOnStartup() async {
-    final path = await _resolveModelPath();
-    if (await _downloader.isInstalled(path)) {
-      state = state.copyWith(status: ModelStatus.ready);
-      // Already downloaded from a previous run — load it automatically so
-      // the user can start chatting right away, without an extra tap.
-      await loadModel();
-    } else if (await _downloader.hasResumableDownload(path)) {
-      // Leave as notInstalled but the Models screen offers "resume" once
-      // the user asks to download again — see resumeOrStartDownload().
-      state = state.copyWith(status: ModelStatus.notInstalled);
+    for (final model in ModelCatalog.all) {
+      final path = await _resolveModelPath(model);
+      if (await _downloader.isInstalled(path)) {
+        _updateEntry(model.id, (e) => e.copyWith(status: ModelStatus.ready));
+      } else if (await _downloader.hasResumableDownload(path)) {
+        _updateEntry(model.id, (e) => e.copyWith(status: ModelStatus.paused));
+      }
+    }
+    final lastActiveId = ref.read(settingsServiceProvider).loadActiveModelId();
+    if (lastActiveId != null &&
+        state.entryFor(lastActiveId).status == ModelStatus.ready) {
+      await loadModel(lastActiveId);
     }
   }
 
-  Future<void> download() async {
-    final path = await _resolveModelPath();
-    state = state.copyWith(status: ModelStatus.downloading, errorMessage: null);
+  /// Checks free storage and RAM against [modelId]'s requirements — call
+  /// this before showing the download button as enabled, so the user learns
+  /// up front whether their device can take this model.
+  Future<DeviceCapabilityResult> checkCapability(String modelId) async {
+    final model = ModelCatalog.byId(modelId);
+    final modelsDir = await _modelsDirectory();
+    final result = await _capabilityChecker.check(model, modelsDir.path);
+    _updateEntry(modelId, (e) => e.copyWith(capability: result));
+    return result;
+  }
+
+  Future<void> download(String modelId) async {
+    final model = ModelCatalog.byId(modelId);
+    final variant = model.defaultVariant;
+    final path = await _resolveModelPath(model);
+    _updateEntry(
+      modelId,
+      (e) => e.copyWith(status: ModelStatus.downloading, errorMessage: null),
+    );
     try {
       await _downloader.download(
-        url: _variant.downloadUrl,
+        url: variant.downloadUrl,
         destinationPath: path,
-        expectedSizeBytes: _variant.approximateSizeBytes,
+        expectedSizeBytes: variant.approximateSizeBytes,
         onProgress: (progress) {
-          state = state.copyWith(
-            status: ModelStatus.downloading,
-            progress: progress,
+          _updateEntry(
+            modelId,
+            (e) => e.copyWith(status: ModelStatus.downloading, progress: progress),
           );
         },
       );
-      state = state.copyWith(status: ModelStatus.verifying);
+      // A pause (see pauseDownload) also returns normally from `download`,
+      // so only move to verifying/ready if we're still actually downloading
+      // — otherwise this would stomp a `paused` status right back to ready.
+      if (state.entryFor(modelId).status != ModelStatus.downloading) return;
+      _updateEntry(modelId, (e) => e.copyWith(status: ModelStatus.verifying));
       if (await _downloader.isInstalled(path)) {
-        state = state.copyWith(status: ModelStatus.ready);
+        _updateEntry(modelId, (e) => e.copyWith(status: ModelStatus.ready));
         // Load immediately, like Google AI Edge Gallery does — the user
-        // shouldn't have to tap a second button after a multi-GB download
-        // just to start chatting.
-        await loadModel();
+        // shouldn't have to tap a second button after a multi-GB download.
+        await loadModel(modelId);
       } else {
-        state = state.copyWith(
-          status: ModelStatus.error,
-          errorMessage: 'دانلود ناتمام ماند.',
+        _updateEntry(
+          modelId,
+          (e) => e.copyWith(
+            status: ModelStatus.error,
+            errorMessage: 'دانلود ناتمام ماند.',
+          ),
         );
       }
     } on ModelDownloadException catch (e) {
-      state = state.copyWith(status: ModelStatus.error, errorMessage: e.message);
+      _updateEntry(
+        modelId,
+        (entry) => entry.copyWith(status: ModelStatus.error, errorMessage: e.message),
+      );
     }
   }
 
-  void cancelDownload() {
+  /// Pauses an in-progress download — the partial file is kept so
+  /// [download] resumes from the same byte offset when called again.
+  void pauseDownload(String modelId) {
+    _updateEntry(modelId, (e) => e.copyWith(status: ModelStatus.paused));
     _downloader.cancel();
-    state = state.copyWith(status: ModelStatus.notInstalled);
   }
 
-  Future<void> deleteModel() async {
-    final path = await _resolveModelPath();
+  /// Cancels a download (or discards a paused one) and deletes whatever
+  /// partial data was written, unlike [pauseDownload].
+  Future<void> cancelAndDeleteDownload(String modelId) async {
+    _downloader.cancel();
+    final model = ModelCatalog.byId(modelId);
+    final path = await _resolveModelPath(model);
     await _downloader.delete(path);
-    final engine = ref.read(aiEngineProvider);
-    try {
-      await engine.unloadModel();
-    } catch (_) {
-      // Nothing was loaded — fine to ignore.
-    }
-    state = const ModelState.initial();
+    _updateEntry(modelId, (_) => const ModelEntryState());
   }
 
-  Future<void> loadModel({Backend backend = Backend.cpu}) async {
-    final path = await _resolveModelPath();
-    state = state.copyWith(status: ModelStatus.loading, errorMessage: null);
+  Future<void> deleteModel(String modelId) async {
+    final model = ModelCatalog.byId(modelId);
+    final path = await _resolveModelPath(model);
+    await _downloader.delete(path);
+    if (state.activeModelId == modelId) {
+      await ref.read(aiEngineProvider).unloadModel().catchError((_) {});
+    }
+    _updateEntry(modelId, (_) => const ModelEntryState());
+  }
+
+  Future<void> loadModel(String modelId, {Backend backend = Backend.cpu}) async {
+    final model = ModelCatalog.byId(modelId);
+    final path = await _resolveModelPath(model);
+    final currentActive = state.activeModelId;
+    if (currentActive != null && currentActive != modelId) {
+      await unloadModel();
+    }
+    _updateEntry(
+      modelId,
+      (e) => e.copyWith(status: ModelStatus.loading, errorMessage: null),
+    );
+    // Marks the first-run download gate as done the moment a load is
+    // attempted, not only on success — so the app transitions to the main
+    // UI immediately (a load failure surfaces as an error state there,
+    // reachable from Settings ▸ Models, rather than bouncing back to the
+    // gate). See docs on `onboardingCompleteProvider`.
+    ref.read(onboardingCompleteProvider.notifier).complete();
     final engine = ref.read(aiEngineProvider);
     try {
       await engine.initialize();
       await engine.loadModel(path, backend: backend);
       final info = await engine.getModelInfo();
-      state = state.copyWith(status: ModelStatus.loaded, info: info);
+      _updateEntry(modelId, (e) => e.copyWith(status: ModelStatus.loaded, info: info));
+      await ref.read(settingsServiceProvider).saveActiveModelId(modelId);
     } on AiEngineException catch (e) {
-      state = state.copyWith(status: ModelStatus.error, errorMessage: e.message);
+      _updateEntry(
+        modelId,
+        (entry) => entry.copyWith(status: ModelStatus.error, errorMessage: e.message),
+      );
     }
   }
 
   Future<void> unloadModel() async {
-    final engine = ref.read(aiEngineProvider);
-    await engine.unloadModel();
-    state = state.copyWith(status: ModelStatus.ready);
+    final activeId = state.activeModelId;
+    if (activeId == null) return;
+    await ref.read(aiEngineProvider).unloadModel();
+    _updateEntry(activeId, (e) => e.copyWith(status: ModelStatus.ready));
+    await ref.read(settingsServiceProvider).saveActiveModelId(null);
   }
 }
 
-final modelManagerProvider = NotifierProvider<ModelManager, ModelState>(
+final modelManagerProvider = NotifierProvider<ModelManager, ModelManagerState>(
   ModelManager.new,
 );

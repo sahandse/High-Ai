@@ -1,19 +1,82 @@
 import 'package:flutter/material.dart';
 
-/// A single, restrained seed color drives both palettes — no per-widget
-/// color overrides scattered through the feature code, so the UI stays
-/// visually minimal and consistent by construction.
-const _seedColor = Color(0xFF2F6F5E);
+/// Named visual styles the user picks from Settings ▸ Appearance.
+///
+/// [chatgptLight] and [claudeDark] are original palettes *inspired by* the
+/// well-known light/dark assistant UIs the project brief names as design
+/// references — not a pixel copy of either product's branding, logo, or
+/// exact colors, per the brief's explicit instruction not to clone them.
+enum ThemePreset {
+  /// The app's own restrained teal palette, following system/light/dark.
+  classic,
 
-ThemeData buildLightTheme() => _buildTheme(Brightness.light);
+  /// A clean, warm-white, high-contrast light theme in the spirit of
+  /// ChatGPT's light mode.
+  chatgptLight,
 
-ThemeData buildDarkTheme() => _buildTheme(Brightness.dark);
+  /// A warm, near-black dark theme in the spirit of Claude's dark mode.
+  claudeDark,
+}
 
-ThemeData _buildTheme(Brightness brightness) {
+/// Whether [preset] forces a specific brightness or lets the user's
+/// light/dark/system choice (the [fallback]) decide.
+ThemeMode effectiveThemeMode(ThemePreset preset, ThemeMode fallback) {
+  return switch (preset) {
+    ThemePreset.classic => fallback,
+    ThemePreset.chatgptLight => ThemeMode.light,
+    ThemePreset.claudeDark => ThemeMode.dark,
+  };
+}
+
+const _classicSeed = Color(0xFF2F6F5E);
+
+ThemeData themeFor(ThemePreset preset, Brightness brightness) {
+  return switch (preset) {
+    ThemePreset.classic => _classicTheme(brightness),
+    ThemePreset.chatgptLight => _chatgptLightTheme(),
+    ThemePreset.claudeDark => _claudeDarkTheme(),
+  };
+}
+
+ThemeData _classicTheme(Brightness brightness) {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: _seedColor,
+    seedColor: _classicSeed,
     brightness: brightness,
   );
+  return _themeFromScheme(colorScheme);
+}
+
+/// Warm off-white background, near-black text, a muted green accent — a
+/// clean, minimal light theme rather than ChatGPT's exact palette.
+ThemeData _chatgptLightTheme() {
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: const Color(0xFF10A37F),
+    brightness: Brightness.light,
+  ).copyWith(
+    surface: const Color(0xFFFFFFFF),
+    surfaceContainerHighest: const Color(0xFFF7F7F8),
+    surfaceContainerHigh: const Color(0xFFF3F3F4),
+    outline: const Color(0xFFD9D9E3),
+  );
+  return _themeFromScheme(colorScheme);
+}
+
+/// Warm near-black background with cream text and a muted rust/orange
+/// accent — a minimal dark theme in the spirit of Claude's dark mode.
+ThemeData _claudeDarkTheme() {
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: const Color(0xFFCC785C),
+    brightness: Brightness.dark,
+  ).copyWith(
+    surface: const Color(0xFF1F1B18),
+    surfaceContainerHighest: const Color(0xFF2A2521),
+    surfaceContainerHigh: const Color(0xFF262220),
+    onSurface: const Color(0xFFEDE6DD),
+  );
+  return _themeFromScheme(colorScheme);
+}
+
+ThemeData _themeFromScheme(ColorScheme colorScheme) {
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
@@ -28,7 +91,7 @@ ThemeData _buildTheme(Brightness brightness) {
     cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 16,
         vertical: 12,

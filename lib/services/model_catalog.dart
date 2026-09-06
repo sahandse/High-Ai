@@ -1,9 +1,7 @@
-/// Static metadata for the one model this v1 supports — Gemma 4 E2B via
-/// LiteRT-LM. See docs/ARCHITECTURE.md §0/§7: the Hugging Face repo hosts
-/// several SoC-specific `.litertlm` files rather than one universal
-/// artifact, so [defaultVariant] picks a broadly-compatible Android variant
-/// as a starting point. Automatic per-device SoC detection (choosing among
-/// [variants]) is tracked as follow-up work, not implemented in v1.
+/// Static metadata for the models this app can download — see
+/// docs/ARCHITECTURE.md §0/§7: Hugging Face hosts several per-SoC
+/// `.litertlm` files for some models rather than one universal artifact,
+/// so each [ModelDefinition] lists its own [variants].
 class ModelVariant {
   const ModelVariant({
     required this.id,
@@ -16,34 +14,85 @@ class ModelVariant {
   final int approximateSizeBytes;
 }
 
+class ModelDefinition {
+  const ModelDefinition({
+    required this.id,
+    required this.displayName,
+    required this.description,
+    required this.badge,
+    required this.contextLength,
+    required this.variants,
+  });
+
+  /// Stable id, matching the Hugging Face repo under `litert-community/`.
+  final String id;
+
+  final String displayName;
+
+  /// Short Persian description shown in the model picker.
+  final String description;
+
+  /// Short Persian label, e.g. "توصیه‌شده" or "حرفه‌ای".
+  final String badge;
+
+  final int contextLength;
+  final List<ModelVariant> variants;
+
+  ModelVariant get defaultVariant => variants.first;
+
+  String fileNameFor(ModelVariant variant) => '${id}_${variant.id}.litertlm';
+}
+
 abstract final class ModelCatalog {
-  static const modelId = 'litert-community/gemma-4-E2B-it-litert-lm';
-  static const displayName = 'Gemma 4 E2B';
-  static const contextLength = 8192;
-
-  static const _repoBase =
+  static const _gemma4E2bBase =
       'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main';
+  static const _gemma4E4bBase =
+      'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main';
 
-  static const variants = [
-    ModelVariant(
-      id: 'qualcomm_sm8750',
-      downloadUrl: '$_repoBase/gemma-4-E2B-it_qualcomm_sm8750.litertlm',
-      approximateSizeBytes: 3243000000,
-    ),
-    ModelVariant(
-      id: 'google_tensor_g5',
-      downloadUrl: '$_repoBase/gemma-4-E2B-it_Google_Tensor_G5.litertlm',
-      approximateSizeBytes: 3340000000,
-    ),
-    ModelVariant(
-      id: 'intel_ptl',
-      downloadUrl: '$_repoBase/gemma-4-E2B-it_intel_PTL.litertlm',
-      approximateSizeBytes: 3168000000,
-    ),
-  ];
+  static const gemma4E2b = ModelDefinition(
+    id: 'gemma-4-e2b',
+    displayName: 'Gemma 4 E2B',
+    description:
+        'مدل کوچک و سریع. برای اکثر گوشی‌ها مناسب است و حافظه کمتری مصرف می‌کند.',
+    badge: 'توصیه‌شده',
+    contextLength: 8192,
+    variants: [
+      ModelVariant(
+        id: 'qualcomm_sm8750',
+        downloadUrl: '$_gemma4E2bBase/gemma-4-E2B-it_qualcomm_sm8750.litertlm',
+        approximateSizeBytes: 3243000000,
+      ),
+      ModelVariant(
+        id: 'google_tensor_g5',
+        downloadUrl: '$_gemma4E2bBase/gemma-4-E2B-it_Google_Tensor_G5.litertlm',
+        approximateSizeBytes: 3340000000,
+      ),
+      ModelVariant(
+        id: 'intel_ptl',
+        downloadUrl: '$_gemma4E2bBase/gemma-4-E2B-it_intel_PTL.litertlm',
+        approximateSizeBytes: 3168000000,
+      ),
+    ],
+  );
 
-  static ModelVariant get defaultVariant => variants.first;
+  static const gemma4E4b = ModelDefinition(
+    id: 'gemma-4-e4b',
+    displayName: 'Gemma 4 E4B',
+    description:
+        'مدل بزرگ‌تر با کیفیت پاسخ بهتر. به حافظه و فضای بیشتری نیاز دارد و ممکن است کندتر باشد.',
+    badge: 'کیفیت بالاتر',
+    contextLength: 8192,
+    variants: [
+      ModelVariant(
+        id: 'generic',
+        downloadUrl: '$_gemma4E4bBase/gemma-4-E4B-it.litertlm',
+        approximateSizeBytes: 3660000000,
+      ),
+    ],
+  );
 
-  static String fileNameFor(ModelVariant variant) =>
-      '${variant.id}.litertlm';
+  static const all = [gemma4E2b, gemma4E4b];
+
+  static ModelDefinition byId(String id) =>
+      all.firstWhere((m) => m.id == id, orElse: () => gemma4E2b);
 }

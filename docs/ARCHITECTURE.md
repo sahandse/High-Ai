@@ -326,3 +326,46 @@ Given the research above, Phase 2 (Flutter shell, mock engine, full UI/UX/DB) ha
 on the unresolved native risk and is being implemented now. Phase 3 (real LiteRT-LM) will start
 with Android (low risk, official API) and treat Windows as its own spike per risk #1 above before
 committing scaffolding to production code paths.
+
+---
+
+## Addendum: real-device findings and v1.1 additions
+
+The Android debug APK was actually installed and run on a physical device (see the GitHub
+Actions build in `.github/workflows/android-debug-apk.yml`, added because this environment has
+no Android SDK). That surfaced one real bug and confirmed a gap noted above:
+
+- **HTTP 416 during download.** `ModelDownloadManager` sent a `Range` header computed from a
+  local `.part` file without ever learning the server's authoritative file size — it trusted
+  the catalog's hardcoded `approximateSizeBytes` for verification, and had no recovery path for
+  a Range request landing at or past the real end of the file (a normal outcome after a resumed
+  download, not just a fluke). Fixed: the manager now reads `Content-Length`/`Content-Range`
+  from the *actual* response for both progress and final-size verification, and a 416 is
+  reconciled against that (install as already-complete if the partial file already covers it,
+  otherwise delete the stale partial and ask the user to retry) instead of surfacing a raw
+  exception. See `test/services/model_download_manager_network_test.dart` for the regression
+  coverage (a scripted `HttpClientAdapter`, no real network).
+- **Missing `INTERNET` permission in the main manifest.** It was only declared in the
+  debug/profile manifests (Flutter's default template), which would have made the downloader
+  silently unusable in a release build. Added to `android/app/src/main/AndroidManifest.xml`.
+
+Also added in this pass, per direct product feedback:
+
+- **Theme presets** (`lib/app/theme.dart`): a "ChatGPT-like" warm-white light theme and a
+  "Claude-like" warm near-black dark theme, alongside the app's own classic palette — original
+  palettes inspired by, not cloned from, either product, per §5's branding constraint.
+- **Multi-model picker**: `ModelCatalog` now lists more than one real, verified
+  `litert-community` model (Gemma 4 E2B and E4B) with Persian descriptions and badges; the user
+  picks and installs one from the same first-run gate and Settings ▸ Models screen
+  (`ModelManager`'s state became a per-model-id map so more than one model's install/load state
+  can be tracked at once, though only one is ever loaded into the engine at a time).
+- **Pause/resume as first-class states**: `ModelStatus.paused` was added (distinct from
+  `notInstalled`) so the UI can offer an explicit resume affordance rather than conflating
+  "paused" with "never started."
+- **Device capability pre-check** (`lib/services/device_capability_checker.dart`): free storage
+  via the `disk_space_plus` plugin, total RAM via a small dedicated method channel added to
+  `MainActivity.kt` (`ActivityManager.MemoryInfo`, not a third-party lib — an alternative
+  cross-platform package that queried `/proc/meminfo` by shelling out to `cat` was tried and
+  rejected as unreliable on Android's app sandboxing). Insufficient storage disables the download
+  button outright (it would fail anyway); low RAM only warns, since the threshold is a heuristic,
+  not a number LiteRT-LM publishes.

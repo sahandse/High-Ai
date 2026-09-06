@@ -45,6 +45,11 @@ abstract final class Strings {
   static const themeSystem = 'هماهنگ با سیستم';
   static const themeLight = 'روشن';
   static const themeDark = 'تیره';
+  static const themePresetLabel = 'تم برنامه';
+  static const themePresetClassic = 'پیش‌فرض (مینیمال)';
+  static const themePresetChatgptLight = 'روشن، به‌سبک ChatGPT';
+  static const themePresetClaudeDark = 'تیره، به‌سبک Claude';
+  static const themeBrightnessLabel = 'حالت روشنایی';
   static const generationSettings = 'تنظیمات تولید پاسخ';
   static const temperature = 'دما (تنوع پاسخ)';
   static const topK = 'Top K';
@@ -54,9 +59,10 @@ abstract final class Strings {
   static const invalidSettings = 'مقدار وارد شده نامعتبر است';
 
   // Models
-  static const modelName = 'Gemma 4 E2B';
+  static const chooseModel = 'یک مدل را برای دانلود انتخاب کنید';
   static const modelStatusNotInstalled = 'نصب نشده';
   static const modelStatusDownloading = 'در حال دانلود';
+  static const modelStatusPaused = 'متوقف‌شده';
   static const modelStatusVerifying = 'در حال بررسی صحت فایل';
   static const modelStatusReady = 'آماده بارگذاری';
   static const modelStatusLoading = 'در حال بارگذاری';
@@ -74,8 +80,15 @@ abstract final class Strings {
   static const modelSize = 'حجم مدل';
   static const backend = 'پردازنده اجرا';
   static const storageUsage = 'فضای اشغال‌شده';
+  static const freeStorage = 'فضای آزاد دستگاه';
+  static const deviceRam = 'حافظه (RAM) دستگاه';
+  static const insufficientStorageWarning =
+      'فضای آزاد دستگاه برای این مدل کافی نیست.';
+  static const lowRamWarning =
+      'حافظه دستگاه کمتر از میزان توصیه‌شده است؛ ممکن است اجرا کند یا ناموفق باشد.';
   static const details = 'جزئیات خطا';
   static const useCpu = 'اجرا با پردازنده (CPU)';
+  static const active = 'فعال';
 
   static String downloadProgress(String downloaded, String total, int percent) =>
       '$downloaded از $total ($percent٪)';

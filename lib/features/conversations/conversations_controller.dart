@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/database.dart';
 import '../../data/database_provider.dart';
 import '../../services/model_catalog.dart';
+import '../../services/model_manager.dart';
 
 const _uuid = Uuid();
 
@@ -24,11 +25,9 @@ class ConversationsController {
 
   Future<String> createConversation({String title = 'گفتگوی جدید'}) async {
     final id = _uuid.v4();
-    await _db.createConversation(
-      id: id,
-      title: title,
-      modelId: ModelCatalog.modelId,
-    );
+    final activeModelId =
+        _ref.read(modelManagerProvider).activeModelId ?? ModelCatalog.all.first.id;
+    await _db.createConversation(id: id, title: title, modelId: activeModelId);
     return id;
   }
 

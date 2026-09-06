@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/theme.dart';
 import '../../core/strings.dart';
 import '../../services/settings_service.dart';
 
@@ -11,6 +12,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final themePreset = ref.watch(themePresetProvider);
     final settings = ref.watch(generationSettingsProvider);
 
     return Scaffold(
@@ -26,21 +28,39 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(height: 32),
           Text(Strings.appearance, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          SegmentedButton<ThemeMode>(
-            segments: const [
-              ButtonSegment(
-                value: ThemeMode.system,
-                label: Text(Strings.themeSystem),
-              ),
-              ButtonSegment(value: ThemeMode.light, label: Text(Strings.themeLight)),
-              ButtonSegment(value: ThemeMode.dark, label: Text(Strings.themeDark)),
-            ],
-            selected: {themeMode},
-            onSelectionChanged: (selection) => ref
-                .read(themeModeProvider.notifier)
-                .setThemeMode(selection.first),
+          const SizedBox(height: 12),
+          Text(
+            Strings.themePresetLabel,
+            style: Theme.of(context).textTheme.labelLarge,
           ),
+          const SizedBox(height: 8),
+          _ThemePresetPicker(
+            selected: themePreset,
+            onChanged: (preset) =>
+                ref.read(themePresetProvider.notifier).setPreset(preset),
+          ),
+          if (themePreset == ThemePreset.classic) ...[
+            const SizedBox(height: 16),
+            Text(
+              Strings.themeBrightnessLabel,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  label: Text(Strings.themeSystem),
+                ),
+                ButtonSegment(value: ThemeMode.light, label: Text(Strings.themeLight)),
+                ButtonSegment(value: ThemeMode.dark, label: Text(Strings.themeDark)),
+              ],
+              selected: {themeMode},
+              onSelectionChanged: (selection) => ref
+                  .read(themeModeProvider.notifier)
+                  .setThemeMode(selection.first),
+            ),
+          ],
           const Divider(height: 32),
           Text(
             Strings.generationSettings,
@@ -98,6 +118,84 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ThemePresetPicker extends StatelessWidget {
+  const _ThemePresetPicker({required this.selected, required this.onChanged});
+
+  final ThemePreset selected;
+  final ValueChanged<ThemePreset> onChanged;
+
+  static const _options = [
+    (ThemePreset.classic, Strings.themePresetClassic, Color(0xFF2F6F5E), Color(0xFFF4F4F5)),
+    (
+      ThemePreset.chatgptLight,
+      Strings.themePresetChatgptLight,
+      Color(0xFF10A37F),
+      Color(0xFFFFFFFF),
+    ),
+    (
+      ThemePreset.claudeDark,
+      Strings.themePresetClaudeDark,
+      Color(0xFFCC785C),
+      Color(0xFF1F1B18),
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: _options.map((option) {
+        final (preset, label, accent, background) = option;
+        final isSelected = preset == selected;
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => onChanged(preset),
+          child: Container(
+            width: 108,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isSelected
+                    ? accent
+                    : Theme.of(context).colorScheme.outlineVariant,
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: background.computeLuminance() > 0.5
+                        ? Colors.black87
+                        : Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
