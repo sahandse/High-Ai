@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "com.highai.high_ai"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage (used for the Hugging Face access token) requires
+    // compileSdk 37; Flutter's own default (flutter.compileSdkVersion) lags
+    // behind that, so it's pinned explicitly here instead.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
