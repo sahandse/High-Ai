@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/strings.dart';
 import '../../services/model_catalog.dart';
 import '../../services/model_manager.dart';
+import 'widgets/model_status_widgets.dart';
 
 class ModelsScreen extends ConsumerWidget {
   const ModelsScreen({super.key});
@@ -12,6 +13,8 @@ class ModelsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final model = ref.watch(modelManagerProvider);
+    final manager = ref.read(modelManagerProvider.notifier);
+
     return Scaffold(
       appBar: AppBar(title: const Text(Strings.models)),
       body: ListView(
@@ -36,14 +39,14 @@ class ModelsScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const Spacer(),
-                      _StatusChip(status: model.status),
+                      StatusChip(status: model.status),
                     ],
                   ),
                   const SizedBox(height: 16),
                   _ModelDetails(model: model),
                   const SizedBox(height: 16),
                   if (model.status == ModelStatus.downloading)
-                    _DownloadProgressView(model: model),
+                    DownloadProgressView(progress: model.progress),
                   if (model.status == ModelStatus.error &&
                       model.errorMessage != null)
                     Padding(
@@ -58,7 +61,15 @@ class ModelsScreen extends ConsumerWidget {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: _actionsFor(context, ref, model.status),
+                    children: [
+                      ...modelActionsFor(manager, model.status),
+                      if (model.status == ModelStatus.ready)
+                        OutlinedButton.icon(
+                          onPressed: () => _confirmDelete(context, manager),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          label: const Text(Strings.deleteModel),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -67,70 +78,6 @@ class ModelsScreen extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  List<Widget> _actionsFor(
-    BuildContext context,
-    WidgetRef ref,
-    ModelStatus status,
-  ) {
-    final manager = ref.read(modelManagerProvider.notifier);
-    switch (status) {
-      case ModelStatus.notInstalled:
-        return [
-          FilledButton.icon(
-            onPressed: manager.download,
-            icon: const Icon(Icons.download_rounded),
-            label: const Text(Strings.download),
-          ),
-        ];
-      case ModelStatus.downloading:
-        return [
-          OutlinedButton.icon(
-            onPressed: manager.cancelDownload,
-            icon: const Icon(Icons.close_rounded),
-            label: const Text(Strings.cancelDownload),
-          ),
-        ];
-      case ModelStatus.verifying:
-        return const [];
-      case ModelStatus.ready:
-        return [
-          FilledButton.icon(
-            onPressed: manager.loadModel,
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text(Strings.load),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => _confirmDelete(context, manager),
-            icon: const Icon(Icons.delete_outline_rounded),
-            label: const Text(Strings.deleteModel),
-          ),
-        ];
-      case ModelStatus.loading:
-        return const [];
-      case ModelStatus.loaded:
-        return [
-          OutlinedButton.icon(
-            onPressed: manager.unloadModel,
-            icon: const Icon(Icons.stop_circle_outlined),
-            label: const Text(Strings.unload),
-          ),
-        ];
-      case ModelStatus.error:
-        return [
-          FilledButton.icon(
-            onPressed: manager.download,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text(Strings.retry),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => manager.loadModel(backend: Backend.cpu),
-            icon: const Icon(Icons.developer_board_rounded),
-            label: const Text(Strings.useCpu),
-          ),
-        ];
-    }
   }
 
   void _confirmDelete(BuildContext context, ModelManager manager) {
@@ -156,37 +103,6 @@ class ModelsScreen extends ConsumerWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final ModelStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = switch (status) {
-      ModelStatus.notInstalled => Strings.modelStatusNotInstalled,
-      ModelStatus.downloading => Strings.modelStatusDownloading,
-      ModelStatus.verifying => Strings.modelStatusVerifying,
-      ModelStatus.ready => Strings.modelStatusReady,
-      ModelStatus.loading => Strings.modelStatusLoading,
-      ModelStatus.loaded => Strings.modelStatusLoaded,
-      ModelStatus.error => Strings.modelStatusError,
-    };
-    final scheme = Theme.of(context).colorScheme;
-    final color = status == ModelStatus.error
-        ? scheme.error
-        : status == ModelStatus.loaded
-        ? scheme.primary
-        : scheme.onSurfaceVariant;
-    return Chip(
-      label: Text(label),
-      labelStyle: TextStyle(color: color),
-      side: BorderSide(color: color.withValues(alpha: 0.4)),
-      backgroundColor: Colors.transparent,
-    );
-  }
-}
-
 class _ModelDetails extends StatelessWidget {
   const _ModelDetails({required this.model});
 
@@ -207,50 +123,6 @@ class _ModelDetails extends StatelessWidget {
         if (model.info?.contextLength != null)
           Text('طول زمینه: ${model.info!.contextLength} توکن', style: style),
       ],
-    );
-  }
-}
-
-class _DownloadProgressView extends StatelessWidget {
-  const _DownloadProgressView({required this.model});
-
-  final ModelState model;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = model.progress;
-    if (progress == null) {
-      return const Padding(
-        padding: EdgeInsets.only(bottom: 12),
-        child: LinearProgressIndicator(),
-      );
-    }
-    final downloadedMb = (progress.downloadedBytes / 1e6).toStringAsFixed(0);
-    final totalMb = (progress.totalBytes / 1e6).toStringAsFixed(0);
-    final speedMb = (progress.bytesPerSecond / 1e6).toStringAsFixed(1);
-    final eta = progress.eta;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(value: progress.fraction),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            Strings.downloadProgress(
-              '$downloadedMb مگابایت',
-              '$totalMb مگابایت',
-              progress.percent,
-            ),
-          ),
-          Text(Strings.downloadSpeed('$speedMb مگابایت')),
-          if (eta != null)
-            Text(Strings.etaLabel('${eta.inMinutes} دقیقه')),
-        ],
-      ),
     );
   }
 }
