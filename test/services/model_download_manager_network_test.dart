@@ -188,4 +188,41 @@ void main() {
       throwsA(isA<ModelDownloadException>()),
     );
   });
+
+  test('a 401 from a gated repo throws ModelDownloadAuthException', () async {
+    final dio = Dio()..httpClientAdapter = _ScriptedAdapter((options) => _bodyOf(const [], 401));
+    final manager = ModelDownloadManager(dio: dio);
+
+    await expectLater(
+      manager.download(url: 'https://example.test/model.litertlm', destinationPath: destinationPath),
+      throwsA(isA<ModelDownloadAuthException>()),
+    );
+    // The final file is never installed after an auth failure.
+    expect(await File(destinationPath).exists(), isFalse);
+  });
+
+  test('sends an Authorization header when an access token is provided', () async {
+    String? sentAuth;
+    final content = List<int>.generate(10, (i) => i);
+    final dio = Dio()
+      ..httpClientAdapter = _ScriptedAdapter((options) {
+        sentAuth = options.headers['authorization'] as String?;
+        return _bodyOf(
+          content,
+          200,
+          headers: {
+            'content-length': ['10'],
+          },
+        );
+      });
+    final manager = ModelDownloadManager(dio: dio);
+
+    await manager.download(
+      url: 'https://example.test/model.litertlm',
+      destinationPath: destinationPath,
+      accessToken: 'hf_secret_token',
+    );
+
+    expect(sentAuth, 'Bearer hf_secret_token');
+  });
 }

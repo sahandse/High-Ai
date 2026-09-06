@@ -4,8 +4,9 @@
 نیاز به API ابری، حساب کاربری یا اتصال اینترنت پس از دانلود مدل. رابط کاربری به
 زبان فارسی و راست‌به‌چپ (RTL) است.
 
-مدل پشتیبانی‌شده: **Gemma 4 E2B** از طریق موتور استنتاج
-[LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) گوگل.
+مدل‌های پشتیبانی‌شده: خانواده **Gemma** (۴، ۳n، ۳) و همچنین **Qwen 2.5** و **DeepSeek R1
+Distill** — همان مجموعه مدل‌های واقعی اپلیکیشن رسمی Google AI Edge Gallery — از طریق موتور
+استنتاج [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) گوگل.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full technical design,
 integration strategy, and known risks.
@@ -24,6 +25,15 @@ integration strategy, and known risks.
   §5/§6) but not implemented — upstream LiteRT-LM does not publish a stable C API or
   prebuilt shared library for desktop yet, so this requires building LiteRT-LM from
   source with a first-party C ABI wrapper before Dart FFI bindings can be written.
+  The same Flutter UI already builds and runs on Windows via
+  `.github/workflows/windows-build.yml`; `AiEngine.isSupported` is `false` there, so
+  the app shows an honest "not available on this platform yet" message instead of
+  letting a user download a model it can't yet run.
+- **App icon**: a real launcher icon/logo (not the Flutter default) is wired up for
+  Android and Windows — see `lib/app/app_logo.dart` and docs/ARCHITECTURE.md Addendum 5.
+- **Gated models**: the Gemma family is gated on Hugging Face behind a license
+  click-through; add a personal access token in Settings ▸ "حساب Hugging Face" to
+  download those models (stored via the platform keystore, not plain preferences).
 
 ## Running
 

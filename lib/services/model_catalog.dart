@@ -40,6 +40,7 @@ class ModelDefinition {
     required this.minRamGb,
     required this.variants,
     this.compatibilityWarning,
+    this.requiresHfAccount = false,
   });
 
   /// Stable internal id — used for local storage paths, not a remote path.
@@ -70,6 +71,13 @@ class ModelDefinition {
   /// Shown as an explicit warning on the model's card — set for models
   /// whose RAM requirement is high enough that most phones won't meet it.
   final String? compatibilityWarning;
+
+  /// True for repos confirmed (or very likely, by the same "google/"-owned
+  /// pattern) to be gated behind Hugging Face's Gemma license — a request
+  /// without a valid, license-accepted access token gets 401/403 even
+  /// against a `litert-community` mirror. See docs/ARCHITECTURE.md and
+  /// `HfTokenSection` in Settings.
+  final bool requiresHfAccount;
 
   ModelVariant get defaultVariant => variants.first;
 
@@ -150,6 +158,7 @@ abstract final class ModelCatalog {
     badge: 'چندرسانه‌ای',
     contextLength: 32000,
     minRamGb: 8,
+    requiresHfAccount: true,
     variants: [
       ModelVariant(
         id: 'generic',
@@ -175,6 +184,7 @@ abstract final class ModelCatalog {
     contextLength: 32000,
     minRamGb: 12,
     compatibilityWarning: _highRamWarning(12),
+    requiresHfAccount: true,
     variants: [
       ModelVariant(
         id: 'generic',
@@ -200,6 +210,7 @@ abstract final class ModelCatalog {
     badge: 'سبک‌ترین',
     contextLength: 32000,
     minRamGb: 6,
+    requiresHfAccount: true,
     variants: [
       ModelVariant(
         id: 'generic',

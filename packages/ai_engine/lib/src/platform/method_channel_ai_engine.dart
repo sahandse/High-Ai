@@ -31,6 +31,9 @@ class MethodChannelAiEngine implements AiEngine {
   final MethodChannel _methodChannel;
   final EventChannel _eventChannel;
 
+  @override
+  bool get isSupported => true;
+
   Stream<Map<Object?, Object?>>? _events;
   int _nextRequestId = 0;
 

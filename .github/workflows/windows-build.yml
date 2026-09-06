@@ -1,0 +1,36 @@
+name: Windows build
+
+# Same Flutter codebase/UI as the Android build (chat, themes, model
+# picker, database, settings — see .github/workflows/android-debug-apk.yml)
+# built for Windows instead, on a GitHub-hosted windows-latest runner since
+# the sandboxed dev environment used to write this app has no Windows host.
+#
+# Real on-device Gemma inference is NOT wired up for Windows yet — there is
+# no official LiteRT-LM binding for it (see docs/ARCHITECTURE.md §5), only
+# the same architecture staged for it. AiEngine.isSupported is false here,
+# so the app shows an honest "not available on this platform yet" message
+# instead of pretending to generate a response.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/flutter-litert-ai-chat-yfx0k7
+
+jobs:
+  build-windows:
+    name: Windows release build (UI/UX — no local inference yet)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter config --enable-windows-desktop
+      - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: high-ai-windows
+          path: build/windows/x64/runner/Release/

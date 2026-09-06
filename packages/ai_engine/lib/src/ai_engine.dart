@@ -11,6 +11,13 @@ import 'models/backend.dart';
 /// that decision is made inside the engine implementation returned by
 /// `createAiEngine()`. See docs/ARCHITECTURE.md §2.
 abstract class AiEngine {
+  /// False when this platform has no native inference bridge yet (e.g.
+  /// Windows/macOS in v1 — see docs/ARCHITECTURE.md §5/§6). Callers check
+  /// this *before* committing to a multi-GB download, rather than letting
+  /// the user download a model only to have [loadModel] throw
+  /// [UnsupportedPlatformException] at the very end.
+  bool get isSupported;
+
   /// Prepares the engine for use (e.g. binds native resources). Cheap and
   /// idempotent — does not load a model.
   Future<void> initialize();

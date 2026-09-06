@@ -40,6 +40,7 @@ dependencies:
   shared_preferences: ^2.3.4
   flutter_markdown_plus: ^1.0.12
   disk_space_plus: ^0.2.6
+  flutter_secure_storage: ^11.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -49,3 +50,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/app_icon.png

@@ -132,6 +132,26 @@ class ModelCard extends ConsumerWidget {
               ),
             ),
           ],
+          if (model.requiresHfAccount &&
+              (entry.status == ModelStatus.notInstalled ||
+                  entry.status == ModelStatus.paused)) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded, size: 15, color: colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'برای دانلود این مدل باید توکن Hugging Face خود را در تنظیمات وارد کرده باشید.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           if (entry.status == ModelStatus.notInstalled ||
               entry.status == ModelStatus.paused)

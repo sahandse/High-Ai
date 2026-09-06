@@ -16,6 +16,9 @@ class UnsupportedAiEngine implements AiEngine {
 
   final String platformName;
 
+  @override
+  bool get isSupported => false;
+
   Never _unsupported() => throw UnsupportedPlatformException(
     'Local inference on $platformName is not implemented yet. '
     'See docs/ARCHITECTURE.md for status.',

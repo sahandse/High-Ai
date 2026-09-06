@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../core/strings.dart';
 import 'ai_engine_provider.dart';
 import 'device_capability_checker.dart';
+import 'hf_token_storage.dart';
 import 'model_catalog.dart';
 import 'model_download_manager.dart';
 import 'settings_service.dart' show settingsServiceProvider, onboardingCompleteProvider;
@@ -19,6 +20,7 @@ class ModelEntryState {
     this.progress,
     this.errorMessage,
     this.technicalDetails,
+    this.isAuthError = false,
     this.info,
     this.capability,
   });
@@ -36,6 +38,11 @@ class ModelEntryState {
   /// or bug reports — never as the primary message.
   final String? technicalDetails;
 
+  /// True when [errorMessage] came from a gated Hugging Face repo (401/403)
+  /// — the Models screen offers a shortcut to add an access token instead
+  /// of a plain "try again".
+  final bool isAuthError;
+
   final ModelInfo? info;
 
   /// Populated by [ModelManager.checkCapability] before a download starts,
@@ -48,6 +55,7 @@ class ModelEntryState {
     DownloadProgress? progress,
     String? errorMessage,
     String? technicalDetails,
+    bool isAuthError = false,
     ModelInfo? info,
     DeviceCapabilityResult? capability,
   }) {
@@ -56,6 +64,7 @@ class ModelEntryState {
       progress: progress,
       errorMessage: errorMessage,
       technicalDetails: technicalDetails,
+      isAuthError: isAuthError,
       info: info ?? this.info,
       capability: capability ?? this.capability,
     );
@@ -151,15 +160,31 @@ class ModelManager extends Notifier<ModelManagerState> {
     final model = ModelCatalog.byId(modelId);
     final variant = model.defaultVariant;
     final path = await _resolveModelPath(model);
+    if (!ref.read(aiEngineProvider).isSupported) {
+      // Don't let the user spend bandwidth/storage on a multi-GB download
+      // this platform can't run yet (Windows/macOS today — see
+      // docs/ARCHITECTURE.md §5/§6) — fail fast with the same honest
+      // message loadModel would eventually give.
+      _updateEntry(
+        modelId,
+        (e) => e.copyWith(
+          status: ModelStatus.error,
+          errorMessage: Strings.errorUnsupportedPlatform,
+        ),
+      );
+      return;
+    }
     _updateEntry(
       modelId,
       (e) => e.copyWith(status: ModelStatus.downloading, errorMessage: null),
     );
     try {
+      final accessToken = await ref.read(hfTokenStorageProvider).read();
       await _downloader.download(
         url: variant.downloadUrl,
         destinationPath: path,
         expectedSizeBytes: variant.approximateSizeBytes,
+        accessToken: accessToken,
         onProgress: (progress) {
           _updateEntry(
             modelId,
@@ -186,10 +211,23 @@ class ModelManager extends Notifier<ModelManagerState> {
           ),
         );
       }
+    } on ModelDownloadAuthException catch (e) {
+      _updateEntry(
+        modelId,
+        (entry) => entry.copyWith(
+          status: ModelStatus.error,
+          errorMessage: e.message,
+          isAuthError: true,
+        ),
+      );
     } on ModelDownloadException catch (e) {
       _updateEntry(
         modelId,
-        (entry) => entry.copyWith(status: ModelStatus.error, errorMessage: e.message),
+        (entry) => entry.copyWith(
+          status: ModelStatus.error,
+          errorMessage: e.message,
+          isAuthError: false,
+        ),
       );
     }
   }
@@ -250,7 +288,7 @@ class ModelManager extends Notifier<ModelManagerState> {
         modelId,
         (entry) => entry.copyWith(
           status: ModelStatus.error,
-          errorMessage: _friendlyLoadError(model, e.message),
+          errorMessage: _friendlyLoadError(model, e),
           technicalDetails: e.message,
         ),
       );
@@ -263,8 +301,15 @@ class ModelManager extends Notifier<ModelManagerState> {
   /// we've actually observed to a plain-language explanation; anything
   /// unrecognized still gets a generic friendly message, with the raw text
   /// kept in [ModelEntryState.technicalDetails] behind a details toggle.
-  String _friendlyLoadError(ModelDefinition model, String raw) {
-    final lower = raw.toLowerCase();
+  String _friendlyLoadError(ModelDefinition model, AiEngineException error) {
+    if (error is UnsupportedPlatformException) {
+      // Real case today: Windows/macOS reach this because their native
+      // LiteRT-LM bridge isn't built yet (see docs/ARCHITECTURE.md §5/§6)
+      // — a platform gap, not a per-device failure, so it gets its own
+      // honest message instead of "بارگذاری ... ممکن نشد".
+      return Strings.errorUnsupportedPlatform;
+    }
+    final lower = error.message.toLowerCase();
     if (lower.contains('input tensor not found') ||
         lower.contains('not_found') && lower.contains('executor')) {
       // Observed on a real device with a per-SoC-compiled variant: the

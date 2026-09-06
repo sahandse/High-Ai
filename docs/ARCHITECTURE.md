@@ -479,3 +479,50 @@ Note: `ModelDefinition`/`ModelVariant` switched from `const` to plain `final` in
 because building each `downloadUrl` via a small `_hfUrl()` helper (instead of retyping the full
 URL seven times) is a runtime string interpolation, not a compile-time constant — Dart's `const`
 context would have rejected the function call.
+
+## Addendum 5: gated repos need a Hugging Face token; app logo; Windows CI build
+
+Trying Gemma3-1B-IT surfaced a new failure mode: HTTP 401 at download time (not load time).
+Confirmed by searching Hugging Face directly — the Gemma family is gated behind a license
+click-through, and `litert-community/Gemma3-1B-IT` inherits that gate even though it's a
+community mirror, while `litert-community/gemma-4-E2B-it-litert-lm` (already downloaded
+successfully earlier in this thread) does not. Gating is therefore per-repo, not a blanket rule
+for anything Gemma-named.
+
+Fixed properly rather than worked around:
+- `ModelDownloadManager.download` now accepts an `accessToken` and attaches
+  `Authorization: Bearer <token>` when present; a 401/403 is caught explicitly and raises
+  `ModelDownloadAuthException` (extends `ModelDownloadException`) with a message pointing at
+  adding a token, instead of Dio's generic exception dump leaking through as raw English text
+  (which is what the user's screenshot actually showed — a second instance of the "never expose
+  raw exceptions" rule getting violated by an unhandled status code, same shape as Addendum 1's
+  416 case).
+- The token itself is stored via `flutter_secure_storage` (Android Keystore / Windows Credential
+  Manager), not plain `SharedPreferences` — it's a real credential, not app-preference data. See
+  `lib/services/hf_token_storage.dart` and the new "حساب Hugging Face" section in Settings.
+- `ModelDefinition.requiresHfAccount` flags the repos confirmed (Gemma3-1B-IT) or matching the
+  same `google/`-owned gating pattern (Gemma 3n E2B/E4B) — shown proactively on the model card
+  before the user even attempts a download, plus a dedicated "افزودن توکن Hugging Face" action
+  on the resulting error state instead of a plain "try again".
+
+Also in this pass:
+- **App logo/icon**: a single flat mark (a four-point sparkle on the app's teal squircle,
+  formalizing the placeholder `Icons.auto_awesome_rounded` used throughout into an actual asset)
+  replaces Flutter's default icon in `android/.../mipmap-*/ic_launcher.png` and
+  `windows/runner/resources/app_icon.ico`, and is used in-app via `lib/app/app_logo.dart` /
+  `assets/icon/app_icon.png` — same image everywhere, not just similarly-colored shapes. Built
+  with hand-authored SVG rendered through headless Chromium's DevTools Protocol (driven directly
+  over its debugging WebSocket with Node's built-in `fetch`/`WebSocket`, no `playwright` package
+  needed) rather than an image-editing tool, since this sandbox has neither Pillow nor
+  ImageMagick; the multi-size `.ico` container was assembled by hand (it's just a small documented
+  binary header — `ICONDIR`/`ICONDIRENTRY` — wrapping the same PNGs), since Windows accepts
+  PNG-compressed icon frames natively since Vista.
+- **Windows build**: `.github/workflows/windows-build.yml` builds the exact same Flutter codebase
+  for Windows on a `windows-latest` runner (this sandbox has no Windows host either). The UI —
+  chat, theme picker, model list, settings, database — is identical to Android because it's the
+  same Dart code; `AiEngine.isSupported` is a new getter (`true` for `MethodChannelAiEngine`,
+  `false` for `UnsupportedAiEngine`) that `ModelManager.download` now checks *before* starting a
+  multi-GB download, so a Windows user gets the honest "not available on this platform yet"
+  message up front instead of downloading a model only to have `loadModel` reject it afterward —
+  real local Gemma inference on Windows still requires the from-source LiteRT-LM build described
+  in §5, which remains unimplemented.

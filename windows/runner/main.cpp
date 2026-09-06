@@ -27,7 +27,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"high_ai", origin, size)) {
+  // Kept ASCII (rather than the Persian app name used inside the Flutter
+  // UI) since this literal is compiled as-is by MSVC's native wide-string
+  // handling, which needs a confirmed UTF-8-with-BOM source file to render
+  // non-ASCII correctly — not worth the risk for a window-chrome title
+  // when the actual in-app text (rendered by Flutter/Skia) is unaffected.
+  if (!window.Create(L"High-Ai", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

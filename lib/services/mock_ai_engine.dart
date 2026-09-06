@@ -15,6 +15,9 @@ class MockAiEngine implements AiEngine {
   bool _stopRequested = false;
 
   @override
+  bool get isSupported => true;
+
+  @override
   Future<void> initialize() async {}
 
   @override

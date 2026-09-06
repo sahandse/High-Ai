@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'services/hf_token_storage.dart';
 import 'services/settings_service.dart';
 
 void main() async {
@@ -12,6 +13,7 @@ void main() async {
     ProviderScope(
       overrides: [
         settingsServiceProvider.overrideWithValue(SettingsService(prefs)),
+        hfTokenStorageProvider.overrideWithValue(const HfTokenStorage()),
       ],
       child: const HighAiApp(),
     ),

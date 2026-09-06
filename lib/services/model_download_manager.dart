@@ -38,6 +38,16 @@ class ModelDownloadException implements Exception {
   String toString() => message;
 }
 
+/// Thrown specifically when Hugging Face rejects the request with 401/403 —
+/// confirmed in practice for gated model repos (the Gemma family requires
+/// signing in to huggingface.co and accepting its license before any
+/// request, even to a `litert-community` mirror, succeeds). Distinct from
+/// [ModelDownloadException] so the UI can point the user at adding an
+/// access token instead of just "try again".
+class ModelDownloadAuthException extends ModelDownloadException {
+  const ModelDownloadAuthException(super.message);
+}
+
 /// Downloads a model file to local storage with resume support, atomic
 /// installation, and integrity verification.
 ///
@@ -83,6 +93,7 @@ class ModelDownloadManager {
     required String destinationPath,
     int? expectedSizeBytes,
     String? expectedSha256,
+    String? accessToken,
     void Function(DownloadProgress progress)? onProgress,
   }) async {
     final partFile = File(_partPath(destinationPath));
@@ -95,6 +106,12 @@ class ModelDownloadManager {
       mode: existingBytes > 0 ? FileMode.append : FileMode.write,
     );
 
+    final headers = <String, String>{
+      if (existingBytes > 0) 'range': 'bytes=$existingBytes-',
+      if (accessToken != null && accessToken.isNotEmpty)
+        'authorization': 'Bearer $accessToken',
+    };
+
     int? serverTotalBytes;
     try {
       final Response<ResponseBody> response;
@@ -103,13 +120,14 @@ class ModelDownloadManager {
           url,
           cancelToken: _cancelToken,
           options: Options(
-            headers: existingBytes > 0 ? {'range': 'bytes=$existingBytes-'} : null,
+            headers: headers.isEmpty ? null : headers,
             responseType: ResponseType.stream,
-            // Handle 416 ourselves instead of letting Dio throw — it is a
-            // meaningful, recoverable signal here (our resume offset is at
-            // or past the server's actual file size), not a hard failure.
+            // Handle 416/401/403 ourselves instead of letting Dio throw —
+            // each is a meaningful, recoverable signal here, not a
+            // generic hard failure to dump as raw exception text.
             validateStatus: (status) =>
-                status != null && (status == 200 || status == 206 || status == 416),
+                status != null &&
+                (status == 200 || status == 206 || status == 416 || status == 401 || status == 403),
           ),
         );
       } on DioException catch (e) {
@@ -117,6 +135,15 @@ class ModelDownloadManager {
         await sink.close();
         if (CancelToken.isCancel(e)) return; // paused, not an error.
         throw ModelDownloadException('اتصال به سرور دانلود برقرار نشد: ${e.message}');
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        await sink.flush();
+        await sink.close();
+        throw const ModelDownloadAuthException(
+          'دانلود این مدل نیاز به ورود به حساب Hugging Face و پذیرش مجوز استفاده دارد. '
+          'از تنظیمات، توکن دسترسی Hugging Face خود را وارد کنید.',
+        );
       }
 
       if (response.statusCode == 416) {

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/strings.dart';
 import '../../services/settings_service.dart';
+import 'widgets/hf_token_section.dart';
 import 'widgets/theme_preset_picker.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -30,6 +31,8 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => context.push('/settings/models'),
             ),
           ),
+          const SizedBox(height: 16),
+          const _SectionCard(child: HfTokenSection()),
           const SizedBox(height: 16),
           _SectionCard(
             child: Column(

@@ -91,6 +91,21 @@ abstract final class Strings {
   static const useCpu = 'اجرا با پردازنده (CPU)';
   static const active = 'فعال';
 
+  // Hugging Face access token
+  static const hfTokenSectionTitle = 'حساب Hugging Face';
+  static const hfTokenDescription =
+      'برخی مدل‌ها (مانند خانواده Gemma) نیاز به ورود به حساب Hugging Face و پذیرش '
+      'مجوز استفاده دارند. برای دانلود این مدل‌ها، یک توکن دسترسی از حساب خود '
+      'دریافت و اینجا وارد کنید.';
+  static const hfTokenFieldLabel = 'توکن دسترسی (Access Token)';
+  static const hfTokenFieldHint = 'hf_xxxxxxxxxxxxxxxxxxxx';
+  static const hfTokenSave = 'ذخیره توکن';
+  static const hfTokenRemove = 'حذف توکن';
+  static const hfTokenSaved = 'توکن ذخیره شد';
+  static const hfTokenRemoved = 'توکن حذف شد';
+  static const hfTokenGetOne = 'دریافت توکن از huggingface.co/settings/tokens';
+  static const addHfToken = 'افزودن توکن Hugging Face';
+
   static String downloadProgress(String downloaded, String total, int percent) =>
       '$downloaded از $total ($percent٪)';
 

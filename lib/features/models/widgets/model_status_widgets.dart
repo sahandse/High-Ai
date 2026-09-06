@@ -1,6 +1,7 @@
 import 'package:ai_engine/ai_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/strings.dart';
 import '../../../services/device_capability_checker.dart';
@@ -252,6 +253,20 @@ List<Widget> modelActionsFor(
         ),
       ];
     case ModelStatus.error:
+      if (entry.isAuthError) {
+        return [
+          FilledButton.icon(
+            onPressed: () => context.push('/settings'),
+            icon: const Icon(Icons.key_rounded),
+            label: const Text(Strings.addHfToken),
+          ),
+          TextButton.icon(
+            onPressed: () => manager.download(model.id),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text(Strings.retry),
+          ),
+        ];
+      }
       return [
         FilledButton.icon(
           onPressed: () => manager.download(model.id),

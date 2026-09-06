@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_logo.dart';
 import '../../core/strings.dart';
 import '../../services/model_catalog.dart';
 import '../../services/settings_service.dart';
@@ -34,7 +35,7 @@ class ModelSetupScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.auto_awesome_rounded, size: 30, color: colorScheme.primary),
+                  const AppLogo(size: 64),
                   const SizedBox(height: 12),
                   Text(Strings.appName, style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 32),

@@ -17,6 +17,9 @@ class FakeAiEngine implements AiEngine {
   bool shouldError = false;
 
   @override
+  bool get isSupported => true;
+
+  @override
   Future<void> initialize() async {}
 
   @override
