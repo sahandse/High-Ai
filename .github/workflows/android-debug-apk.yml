@@ -1,0 +1,58 @@
+name: Android debug APK
+
+# Builds installable debug APKs on GitHub's runners (which carry the Android
+# SDK out of the box) since the sandboxed dev environment used to write this
+# app has no Android SDK and cannot reach dl.google.com to install one.
+#
+# Two separate jobs so a failure in the experimental real-engine build never
+# blocks the mock-engine build, which is expected to always succeed — see
+# docs/ARCHITECTURE.md for why the real LiteRT-LM Android bridge is
+# unverified (it has never been compiled).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/flutter-litert-ai-chat-yfx0k7
+
+jobs:
+  build-mock:
+    name: Mock engine (UI/UX testing)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --debug --dart-define=USE_MOCK_AI_ENGINE=true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: high-ai-mock-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+  build-real:
+    name: Real LiteRT-LM engine (experimental, may fail)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: high-ai-real-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
