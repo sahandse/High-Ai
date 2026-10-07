@@ -93,6 +93,44 @@ class MethodChannelAiEngine implements AiEngine {
   }
 
   @override
+  Future<void> loadEmbeddingModel(
+    String modelPath, {
+    Backend backend = Backend.cpu,
+  }) async {
+    await _invoke('loadEmbeddingModel', {
+      'modelPath': modelPath,
+      'backend': backend.name,
+    });
+  }
+
+  @override
+  Future<void> unloadEmbeddingModel() async {
+    await _invoke('unloadEmbeddingModel');
+  }
+
+  @override
+  Future<bool> isEmbeddingModelLoaded() async {
+    final result = await _invoke('isEmbeddingModelLoaded');
+    return result as bool? ?? false;
+  }
+
+  @override
+  Future<List<double>> embedText(
+    String text, {
+    int outputSize = 256,
+    bool normalize = true,
+  }) async {
+    if (text.trim().isEmpty) return const <double>[];
+    final result = await _invoke('embedText', {
+      'text': text,
+      'outputSize': outputSize,
+      'normalize': normalize,
+    });
+    final values = (result as List?) ?? const [];
+    return values.map((value) => (value as num).toDouble()).toList(growable: false);
+  }
+
+  @override
   Stream<GenerationChunk> generate({
     required List<ChatMessage> messages,
     GenerationSettings? settings,
