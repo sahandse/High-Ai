@@ -5,6 +5,7 @@ import '../../data/database.dart';
 import '../../data/database_provider.dart';
 import '../../services/model_catalog.dart';
 import '../../services/model_manager.dart';
+import '../../services/semantic_memory_service.dart';
 
 const _uuid = Uuid();
 
@@ -33,7 +34,10 @@ class ConversationsController {
 
   Future<void> rename(String id, String title) => _db.renameConversation(id, title);
 
-  Future<void> delete(String id) => _db.deleteConversation(id);
+  Future<void> delete(String id) async {
+    await _db.deleteConversation(id);
+    await _ref.read(semanticMemoryProvider).removeConversation(id);
+  }
 }
 
 final conversationsControllerProvider = Provider<ConversationsController>(
