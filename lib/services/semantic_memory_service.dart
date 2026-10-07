@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'ai_engine_provider.dart';
-import 'embedding_model_service.dart';
 import '../data/database_provider.dart';
 
 class SemanticMemoryMatch {
@@ -119,7 +118,8 @@ class SemanticMemoryService {
     required String content,
   }) async {
     final text = content.trim();
-    if (text.length < 3 || !_ref.read(embeddingModelProvider).isUsable) return;
+    if (text.length < 3) return;
+    if (!await _ref.read(aiEngineProvider).isEmbeddingModelLoaded()) return;
 
     final entries = await _entries();
     entries.removeWhere((entry) => entry.messageId == messageId);
@@ -155,7 +155,8 @@ class SemanticMemoryService {
     int limit = 4,
     double minimumScore = 0.42,
   }) async {
-    if (!_ref.read(embeddingModelProvider).isUsable || query.trim().isEmpty) {
+    if (query.trim().isEmpty) return const [];
+    if (!await _ref.read(aiEngineProvider).isEmbeddingModelLoaded()) {
       return const [];
     }
 
@@ -191,7 +192,7 @@ class SemanticMemoryService {
   }
 
   Future<void> backfillFromDatabase() async {
-    if (!_ref.read(embeddingModelProvider).isUsable) return;
+    if (!await _ref.read(aiEngineProvider).isEmbeddingModelLoaded()) return;
     final db = _ref.read(databaseProvider);
     final messages = await db.select(db.messages).get();
     for (final message in messages) {
