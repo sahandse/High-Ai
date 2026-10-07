@@ -44,6 +44,25 @@ class FakeAiEngine implements AiEngine {
   }
 
   @override
+  Future<void> loadEmbeddingModel(
+    String modelPath, {
+    Backend backend = Backend.cpu,
+  }) async {}
+
+  @override
+  Future<void> unloadEmbeddingModel() async {}
+
+  @override
+  Future<bool> isEmbeddingModelLoaded() async => false;
+
+  @override
+  Future<List<double>> embedText(
+    String text, {
+    int outputSize = 256,
+    bool normalize = true,
+  }) async => List<double>.filled(outputSize, 0);
+
+  @override
   Stream<GenerationChunk> generate({
     required List<ChatMessage> messages,
     GenerationSettings? settings,
