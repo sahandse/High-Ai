@@ -51,4 +51,23 @@ class UnsupportedAiEngine implements AiEngine {
 
   @override
   Future<ModelInfo> getModelInfo() => _unsupported();
+
+  @override
+  Future<void> loadEmbeddingModel(
+    String modelPath, {
+    Backend backend = Backend.cpu,
+  }) => _unsupported();
+
+  @override
+  Future<void> unloadEmbeddingModel() => _unsupported();
+
+  @override
+  Future<bool> isEmbeddingModelLoaded() async => false;
+
+  @override
+  Future<List<double>> embedText(
+    String text, {
+    int outputSize = 256,
+    bool normalize = true,
+  }) => _unsupported();
 }
