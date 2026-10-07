@@ -194,6 +194,7 @@ class ChatController extends FamilyNotifier<ChatUiState, String> {
     if (lastUserIndex == -1) return;
     for (final message in history.skip(lastUserIndex + 1)) {
       await _db.deleteMessage(message.id);
+      await ref.read(semanticMemoryProvider).removeMessage(message.id);
     }
     await _generateResponse();
   }
@@ -213,11 +214,15 @@ class ChatController extends FamilyNotifier<ChatUiState, String> {
     );
     for (final message in history.skip(index + 1)) {
       await _db.deleteMessage(message.id);
+      await ref.read(semanticMemoryProvider).removeMessage(message.id);
     }
     await _generateResponse();
   }
 
-  Future<void> deleteMessage(String messageId) => _db.deleteMessage(messageId);
+  Future<void> deleteMessage(String messageId) async {
+    await _db.deleteMessage(messageId);
+    await ref.read(semanticMemoryProvider).removeMessage(messageId);
+  }
 }
 
 final chatControllerProvider =
