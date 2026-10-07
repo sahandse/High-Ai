@@ -57,6 +57,13 @@ abstract final class Strings {
   static const maxOutputTokens = 'حداکثر طول پاسخ';
   static const resetDefaults = 'بازگشت به پیش‌فرض';
   static const invalidSettings = 'مقدار وارد شده نامعتبر است';
+  static const smartMemory = 'حافظه هوشمند';
+  static const smartMemoryDescription =
+      'جستجوی معنایی و RAG کاملاً محلی با EmbeddingGemma 2؛ گفتگوهای مرتبط را بدون ارسال داده به سرور پیدا می‌کند.';
+  static const smartMemoryDownload = 'دانلود EmbeddingGemma 2';
+  static const smartMemoryReady = 'حافظه هوشمند فعال است';
+  static const smartMemoryLoading = 'در حال بارگذاری مدل حافظه...';
+  static const smartMemoryDelete = 'حذف مدل حافظه';
 
   // Models
   static const pickThemeFirst = 'ظاهر برنامه را انتخاب کنید';
