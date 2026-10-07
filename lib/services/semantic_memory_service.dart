@@ -5,8 +5,8 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'ai_engine_provider.dart';
 import '../data/database_provider.dart';
+import 'ai_engine_provider.dart';
 
 class SemanticMemoryMatch {
   const SemanticMemoryMatch({
@@ -121,10 +121,9 @@ class SemanticMemoryService {
     if (text.length < 3) return;
     if (!await _ref.read(aiEngineProvider).isEmbeddingModelLoaded()) return;
 
-    final entries = await _entries();
-    entries.removeWhere((entry) => entry.messageId == messageId);
-
     try {
+      final entries = await _entries();
+      entries.removeWhere((entry) => entry.messageId == messageId);
       final vector = await _ref.read(aiEngineProvider).embedText(text);
       if (vector.isEmpty) return;
       entries.add(
@@ -207,21 +206,33 @@ class SemanticMemoryService {
   }
 
   Future<void> removeMessage(String messageId) async {
-    final entries = await _entries();
-    entries.removeWhere((entry) => entry.messageId == messageId);
-    await _persist(entries);
+    try {
+      final entries = await _entries();
+      entries.removeWhere((entry) => entry.messageId == messageId);
+      await _persist(entries);
+    } catch (_) {
+      // Memory cleanup must never block the core chat/delete flow.
+    }
   }
 
   Future<void> removeConversation(String conversationId) async {
-    final entries = await _entries();
-    entries.removeWhere((entry) => entry.conversationId == conversationId);
-    await _persist(entries);
+    try {
+      final entries = await _entries();
+      entries.removeWhere((entry) => entry.conversationId == conversationId);
+      await _persist(entries);
+    } catch (_) {
+      // Memory cleanup must never block deleting the conversation itself.
+    }
   }
 
   Future<void> clear() async {
     _cache = <_SemanticMemoryEntry>[];
-    final file = await _file();
-    if (await file.exists()) await file.delete();
+    try {
+      final file = await _file();
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // Clearing semantic memory is best-effort if platform storage is unavailable.
+    }
   }
 
   double _cosine(List<double> a, List<double> b) {
