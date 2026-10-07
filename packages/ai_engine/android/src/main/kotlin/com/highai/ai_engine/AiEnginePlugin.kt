@@ -28,10 +28,11 @@ class AiEnginePlugin :
     private var eventSink: EventChannel.EventSink? = null
 
     private val bridge = GemmaEngineBridge()
-    private val embeddingBridge = EmbeddingGemmaBridge()
+    private lateinit var embeddingBridge: EmbeddingGemmaBridge
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        embeddingBridge = EmbeddingGemmaBridge(binding.applicationContext)
         methodChannel = MethodChannel(binding.binaryMessenger, "ai_engine/control")
         methodChannel.setMethodCallHandler(this)
         eventChannel = EventChannel(binding.binaryMessenger, "ai_engine/tokens")
@@ -43,7 +44,9 @@ class AiEnginePlugin :
         eventChannel.setStreamHandler(null)
         scope.launch {
             bridge.unload()
-            withContext(Dispatchers.IO) { embeddingBridge.unload() }
+            if (::embeddingBridge.isInitialized) {
+                withContext(Dispatchers.IO) { embeddingBridge.unload() }
+            }
         }
     }
 
