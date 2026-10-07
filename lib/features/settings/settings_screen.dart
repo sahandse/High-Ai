@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/strings.dart';
 import '../../services/settings_service.dart';
+import '../../services/embedding_model_service.dart';
 import 'widgets/hf_token_section.dart';
 import 'widgets/theme_preset_picker.dart';
 
@@ -16,6 +17,7 @@ class SettingsScreen extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final themePreset = ref.watch(themePresetProvider);
     final settings = ref.watch(generationSettingsProvider);
+    final embedding = ref.watch(embeddingModelProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text(Strings.settings)),
@@ -33,6 +35,10 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           const _SectionCard(child: HfTokenSection()),
+          const SizedBox(height: 16),
+          _SectionCard(
+            child: _EmbeddingMemorySection(state: embedding),
+          ),
           const SizedBox(height: 16),
           _SectionCard(
             child: Column(
@@ -155,6 +161,113 @@ class _SectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: child,
+    );
+  }
+}
+
+class _EmbeddingMemorySection extends ConsumerWidget {
+  const _EmbeddingMemorySection({required this.state});
+
+  final EmbeddingModelState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(embeddingModelProvider.notifier);
+    final status = state.status;
+    final busy = status == EmbeddingModelStatus.downloading ||
+        status == EmbeddingModelStatus.loading;
+
+    String subtitle;
+    switch (status) {
+      case EmbeddingModelStatus.loaded:
+        subtitle = Strings.smartMemoryReady;
+      case EmbeddingModelStatus.downloading:
+        subtitle = 'در حال دانلود مدل حافظه'
+            '${state.progress == null ? '' : ' • ${state.progress!.percent}٪'}';
+      case EmbeddingModelStatus.loading:
+        subtitle = Strings.smartMemoryLoading;
+      case EmbeddingModelStatus.ready:
+        subtitle = 'مدل دانلود شده و آماده بارگذاری است.';
+      case EmbeddingModelStatus.paused:
+        subtitle = 'دانلود متوقف شده؛ می‌توانید ادامه دهید.';
+      case EmbeddingModelStatus.error:
+        subtitle = state.errorMessage ?? 'خطا در آماده‌سازی حافظه هوشمند';
+      case EmbeddingModelStatus.notInstalled:
+        subtitle = Strings.smartMemoryDescription;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.auto_awesome_rounded),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                Strings.smartMemory,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            if (status == EmbeddingModelStatus.loaded)
+              Icon(
+                Icons.check_circle_rounded,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        if (status == EmbeddingModelStatus.downloading &&
+            state.progress != null) ...[
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: state.progress!.fraction.clamp(0, 1)),
+        ],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (status == EmbeddingModelStatus.notInstalled ||
+                status == EmbeddingModelStatus.paused ||
+                status == EmbeddingModelStatus.error)
+              FilledButton.icon(
+                onPressed: busy ? null : controller.download,
+                icon: const Icon(Icons.download_rounded, size: 18),
+                label: Text(
+                  status == EmbeddingModelStatus.paused
+                      ? Strings.resumeDownload
+                      : Strings.smartMemoryDownload,
+                ),
+              ),
+            if (status == EmbeddingModelStatus.ready)
+              FilledButton.icon(
+                onPressed: controller.load,
+                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                label: const Text('فعال‌کردن'),
+              ),
+            if (status == EmbeddingModelStatus.downloading)
+              OutlinedButton.icon(
+                onPressed: controller.pause,
+                icon: const Icon(Icons.pause_rounded, size: 18),
+                label: const Text(Strings.pause),
+              ),
+            if (status == EmbeddingModelStatus.loaded ||
+                status == EmbeddingModelStatus.ready)
+              TextButton.icon(
+                onPressed: busy ? null : controller.delete,
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text(Strings.smartMemoryDelete),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
