@@ -48,6 +48,12 @@ android {
         minSdk = 24
     }
 
+    packaging {
+        jniLibs {
+            pickFirsts.add("**/liblitertlm_jni.so")
+        }
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
