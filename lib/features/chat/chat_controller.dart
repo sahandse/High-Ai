@@ -104,10 +104,8 @@ class ChatController extends FamilyNotifier<ChatUiState, String> {
           content:
               'حافظه محلی مرتبط از گفتگوهای قبلی کاربر در ادامه آمده است. '
               'فقط اگر واقعاً به پرسش فعلی مربوط است از آن استفاده کن و چیزی را '
-              'که در آن نیست حدس نزن.\n\n' +
-              memories
-                  .map((memory) => '• ${memory.content}')
-                  .join('\n'),
+              'که در آن نیست حدس نزن.\n\n'
+              '${memories.map((memory) => '• ${memory.content}').join('\n')}',
         ),
       ...history.map(
         (m) => engine.ChatMessage(
