@@ -72,10 +72,11 @@ kotlin {
 }
 
 dependencies {
-    // Official, stable Kotlin API for LiteRT-LM on Android — see
-    // docs/ARCHITECTURE.md §4. Pinned to 0.16.0 because EmbeddingEngine/EmbeddingGemma 2 support is required;
-    // upstream's own docs describe the surface as still evolving.
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.0")
+    // Match the current Google AI Edge Gallery runtime. Chat continues to use
+    // LiteRT-LM; EmbeddingGemma 2 is executed through MediaPipe Retrieval's
+    // UniversalEmbedder, which is Google's current Android reference path.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
+    implementation("com.google.mediapipe:tasks-retrieval:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test")
