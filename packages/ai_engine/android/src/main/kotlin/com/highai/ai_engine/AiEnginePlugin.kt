@@ -28,6 +28,7 @@ class AiEnginePlugin :
     private var eventSink: EventChannel.EventSink? = null
 
     private val bridge = GemmaEngineBridge()
+    private val embeddingBridge = EmbeddingGemmaBridge()
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -40,7 +41,10 @@ class AiEnginePlugin :
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
-        scope.launch { bridge.unload() }
+        scope.launch {
+            bridge.unload()
+            withContext(Dispatchers.IO) { embeddingBridge.unload() }
+        }
     }
 
     override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
@@ -78,6 +82,52 @@ class AiEnginePlugin :
             }
 
             "isModelLoaded" -> result.success(bridge.isLoaded)
+
+            "loadEmbeddingModel" -> {
+                val modelPath = call.argument<String>("modelPath")
+                val backend = call.argument<String>("backend") ?: "cpu"
+                if (modelPath == null) {
+                    result.error("MODEL_NOT_AVAILABLE", "embedding modelPath was not provided.", null)
+                    return
+                }
+                scope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            embeddingBridge.loadModel(modelPath, backend)
+                        }
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("MODEL_LOAD_FAILED", e.message, null)
+                    }
+                }
+            }
+
+            "unloadEmbeddingModel" -> scope.launch {
+                withContext(Dispatchers.IO) { embeddingBridge.unload() }
+                result.success(null)
+            }
+
+            "isEmbeddingModelLoaded" -> result.success(embeddingBridge.isLoaded)
+
+            "embedText" -> {
+                val text = call.argument<String>("text") ?: ""
+                val outputSize = call.argument<Int>("outputSize") ?: 256
+                val normalize = call.argument<Boolean>("normalize") ?: true
+                if (text.isBlank()) {
+                    result.success(emptyList<Double>())
+                    return
+                }
+                scope.launch {
+                    try {
+                        val vector = withContext(Dispatchers.Default) {
+                            embeddingBridge.embedText(text, outputSize, normalize)
+                        }
+                        result.success(vector.map { it.toDouble() })
+                    } catch (e: Exception) {
+                        result.error("EMBEDDING_FAILED", e.message, null)
+                    }
+                }
+            }
 
             "getModelInfo" -> result.success(
                 mapOf(
