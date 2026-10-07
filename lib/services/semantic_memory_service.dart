@@ -121,7 +121,7 @@ class SemanticMemoryService {
     if (text.length < 3 || !_ref.read(embeddingModelProvider).isUsable) return;
 
     final entries = await _entries();
-    if (entries.any((entry) => entry.messageId == messageId)) return;
+    entries.removeWhere((entry) => entry.messageId == messageId);
 
     try {
       final vector = await _ref.read(aiEngineProvider).embedText(text);
