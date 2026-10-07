@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:high_ai/data/database.dart';
@@ -62,10 +63,32 @@ void main() {
 
   test('deleteMessagesFrom removes messages at or after a timestamp', () async {
     await db.createConversation(id: 'c1', title: 'اول', modelId: 'gemma');
-    await db.insertMessage(id: 'm1', conversationId: 'c1', role: 'user', content: 'یک');
-    final cutoff = DateTime.now();
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    await db.insertMessage(id: 'm2', conversationId: 'c1', role: 'user', content: 'دو');
+
+    // Use explicit timestamps more than one second apart. Drift's default
+    // SQLite DateTime representation is second-granular, so relying on a
+    // few milliseconds of wall-clock delay makes this test flaky.
+    final before = DateTime.utc(2026, 1, 1, 12);
+    final cutoff = before.add(const Duration(seconds: 2));
+    final after = before.add(const Duration(seconds: 4));
+
+    await db.into(db.messages).insert(
+      MessagesCompanion.insert(
+        id: 'm1',
+        conversationId: 'c1',
+        role: 'user',
+        content: 'یک',
+        createdAt: before,
+      ),
+    );
+    await db.into(db.messages).insert(
+      MessagesCompanion.insert(
+        id: 'm2',
+        conversationId: 'c1',
+        role: 'user',
+        content: 'دو',
+        createdAt: after,
+      ),
+    );
 
     await db.deleteMessagesFrom('c1', cutoff);
 
