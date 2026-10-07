@@ -8,6 +8,7 @@ import '../../data/database_provider.dart';
 import '../../domain/message_role.dart';
 import '../../services/ai_engine_provider.dart';
 import '../../services/settings_service.dart';
+import '../../services/semantic_memory_service.dart';
 
 const _uuid = Uuid();
 
@@ -51,8 +52,15 @@ class ChatController extends FamilyNotifier<ChatUiState, String> {
     final trimmed = text.trim();
     if (trimmed.isEmpty || state.isGenerating) return;
 
+    final userMessageId = _uuid.v4();
     await _db.insertMessage(
-      id: _uuid.v4(),
+      id: userMessageId,
+      conversationId: _conversationId,
+      role: MessageRole.user.toDb(),
+      content: trimmed,
+    );
+    await ref.read(semanticMemoryProvider).indexMessage(
+      messageId: userMessageId,
       conversationId: _conversationId,
       role: MessageRole.user.toDb(),
       content: trimmed,
@@ -75,14 +83,39 @@ class ChatController extends FamilyNotifier<ChatUiState, String> {
 
   Future<void> _generateResponse() async {
     final history = await _db.watchMessages(_conversationId).first;
-    final chatMessages = history
-        .map(
-          (m) => engine.ChatMessage(
-            role: MessageRole.fromDb(m.role).toChatRole(),
-            content: m.content,
-          ),
-        )
-        .toList();
+    String? lastUserText;
+    for (final message in history.reversed) {
+      if (MessageRole.fromDb(message.role) == MessageRole.user) {
+        lastUserText = message.content;
+        break;
+      }
+    }
+    final memories = lastUserText == null
+        ? const <SemanticMemoryMatch>[]
+        : await ref.read(semanticMemoryProvider).search(
+              lastUserText,
+              excludeConversationId: _conversationId,
+            );
+
+    final chatMessages = <engine.ChatMessage>[
+      if (memories.isNotEmpty)
+        engine.ChatMessage(
+          role: engine.ChatRole.system,
+          content:
+              'حافظه محلی مرتبط از گفتگوهای قبلی کاربر در ادامه آمده است. '
+              'فقط اگر واقعاً به پرسش فعلی مربوط است از آن استفاده کن و چیزی را '
+              'که در آن نیست حدس نزن.\n\n' +
+              memories
+                  .map((memory) => '• ${memory.content}')
+                  .join('\n'),
+        ),
+      ...history.map(
+        (m) => engine.ChatMessage(
+          role: MessageRole.fromDb(m.role).toChatRole(),
+          content: m.content,
+        ),
+      ),
+    ];
 
     final assistantId = _uuid.v4();
     await _db.insertMessage(
@@ -125,6 +158,14 @@ class ChatController extends FamilyNotifier<ChatUiState, String> {
             isGenerating: false,
             errorMessage: chunk.isError ? Strings.errorGenerationFailed : null,
           );
+          if (!chunk.isError && buffer.isNotEmpty) {
+            await ref.read(semanticMemoryProvider).indexMessage(
+              messageId: assistantId,
+              conversationId: _conversationId,
+              role: MessageRole.assistant.toDb(),
+              content: buffer.toString(),
+            );
+          }
         }
       }
     } on engine.AiEngineException catch (e) {
@@ -162,7 +203,14 @@ class ChatController extends FamilyNotifier<ChatUiState, String> {
     final history = await _db.watchMessages(_conversationId).first;
     final index = history.indexWhere((m) => m.id == messageId);
     if (index == -1) return;
-    await _db.updateMessageContent(messageId, newContent.trim());
+    final edited = newContent.trim();
+    await _db.updateMessageContent(messageId, edited);
+    await ref.read(semanticMemoryProvider).indexMessage(
+      messageId: messageId,
+      conversationId: _conversationId,
+      role: history[index].role,
+      content: edited,
+    );
     for (final message in history.skip(index + 1)) {
       await _db.deleteMessage(message.id);
     }
