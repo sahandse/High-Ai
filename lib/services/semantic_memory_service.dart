@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'ai_engine_provider.dart';
 import 'embedding_model_service.dart';
+import '../data/database_provider.dart';
 
 class SemanticMemoryMatch {
   const SemanticMemoryMatch({
@@ -187,6 +188,27 @@ class SemanticMemoryService {
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<void> backfillFromDatabase() async {
+    if (!_ref.read(embeddingModelProvider).isUsable) return;
+    final db = _ref.read(databaseProvider);
+    final messages = await db.select(db.messages).get();
+    for (final message in messages) {
+      if (!message.isComplete || message.content.trim().length < 3) continue;
+      await indexMessage(
+        messageId: message.id,
+        conversationId: message.conversationId,
+        role: message.role,
+        content: message.content,
+      );
+    }
+  }
+
+  Future<void> removeMessage(String messageId) async {
+    final entries = await _entries();
+    entries.removeWhere((entry) => entry.messageId == messageId);
+    await _persist(entries);
   }
 
   Future<void> removeConversation(String conversationId) async {
