@@ -12,6 +12,7 @@ import 'package:ai_engine/ai_engine.dart';
 /// requirement in docs/ARCHITECTURE.md.
 class MockAiEngine implements AiEngine {
   bool _loaded = false;
+  bool _embeddingLoaded = false;
   bool _stopRequested = false;
 
   @override
@@ -48,6 +49,46 @@ class MockAiEngine implements AiEngine {
   @override
   Future<void> stopGeneration() async {
     _stopRequested = true;
+  }
+
+  @override
+  Future<void> loadEmbeddingModel(
+    String modelPath, {
+    Backend backend = Backend.cpu,
+  }) async {
+    _embeddingLoaded = true;
+  }
+
+  @override
+  Future<void> unloadEmbeddingModel() async {
+    _embeddingLoaded = false;
+  }
+
+  @override
+  Future<bool> isEmbeddingModelLoaded() async => _embeddingLoaded;
+
+  @override
+  Future<List<double>> embedText(
+    String text, {
+    int outputSize = 256,
+    bool normalize = true,
+  }) async {
+    if (!_embeddingLoaded) {
+      throw const ModelLoadException('Mock embedding model is not loaded.');
+    }
+    final vector = List<double>.filled(outputSize, 0);
+    for (var i = 0; i < text.runes.length; i++) {
+      final rune = text.runes.elementAt(i);
+      vector[i % outputSize] += (rune % 997) / 997.0;
+    }
+    if (!normalize) return vector;
+    var sum = 0.0;
+    for (final value in vector) {
+      sum += value * value;
+    }
+    final norm = sqrt(sum);
+    if (norm == 0) return vector;
+    return vector.map((value) => value / norm).toList(growable: false);
   }
 
   @override
