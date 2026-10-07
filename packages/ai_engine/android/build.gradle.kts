@@ -73,9 +73,9 @@ kotlin {
 
 dependencies {
     // Official, stable Kotlin API for LiteRT-LM on Android — see
-    // docs/ARCHITECTURE.md §4. Pinned rather than `latest.release` because
+    // docs/ARCHITECTURE.md §4. Pinned to 0.16.0 because EmbeddingEngine/EmbeddingGemma 2 support is required;
     // upstream's own docs describe the surface as still evolving.
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.13.1")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test")
