@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../core/strings.dart';
 import '../../services/settings_service.dart';
 import '../../services/embedding_model_service.dart';
+import '../../services/semantic_memory_service.dart';
 import 'widgets/hf_token_section.dart';
 import 'widgets/theme_preset_picker.dart';
 
@@ -227,7 +228,9 @@ class _EmbeddingMemorySection extends ConsumerWidget {
         if (status == EmbeddingModelStatus.downloading &&
             state.progress != null) ...[
           const SizedBox(height: 12),
-          LinearProgressIndicator(value: state.progress!.fraction.clamp(0, 1)),
+          LinearProgressIndicator(
+            value: state.progress!.fraction.clamp(0, 1).toDouble(),
+          ),
         ],
         const SizedBox(height: 12),
         Wrap(
@@ -238,7 +241,14 @@ class _EmbeddingMemorySection extends ConsumerWidget {
                 status == EmbeddingModelStatus.paused ||
                 status == EmbeddingModelStatus.error)
               FilledButton.icon(
-                onPressed: busy ? null : controller.download,
+                onPressed: busy
+                    ? null
+                    : () async {
+                        await controller.download();
+                        if (ref.read(embeddingModelProvider).isUsable) {
+                          await ref.read(semanticMemoryProvider).backfillFromDatabase();
+                        }
+                      },
                 icon: const Icon(Icons.download_rounded, size: 18),
                 label: Text(
                   status == EmbeddingModelStatus.paused
@@ -248,7 +258,12 @@ class _EmbeddingMemorySection extends ConsumerWidget {
               ),
             if (status == EmbeddingModelStatus.ready)
               FilledButton.icon(
-                onPressed: controller.load,
+                onPressed: () async {
+                  await controller.load();
+                  if (ref.read(embeddingModelProvider).isUsable) {
+                    await ref.read(semanticMemoryProvider).backfillFromDatabase();
+                  }
+                },
                 icon: const Icon(Icons.play_arrow_rounded, size: 18),
                 label: const Text('فعال‌کردن'),
               ),
